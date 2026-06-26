@@ -1,0 +1,1 @@
+ALTER TABLE public.sales_channels ADD COLUMN delivery_fee numeric DEFAULT 0;
