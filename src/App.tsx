@@ -12,6 +12,10 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import WhatsAppInbox from "./pages/WhatsAppInbox";
+import Settings from "./pages/Settings";
+import Integrations from "./pages/Integrations";
+import UsersPage from "./pages/Users";
+import Audit from "./pages/Audit";
 import CRMFunnel from "./pages/CRMFunnel";
 import CRMMetrics from "./pages/CRMMetrics";
 import AutoReactivation from "./pages/AutoReactivation";
@@ -58,6 +62,10 @@ const App = () => (
                       <Route path="/crm/campanhas" element={<CRMCampaigns />} />
                       <Route path="/crm/campanhas/nova" element={<CRMCampaignNew />} />
                       <Route path="/crm/campanhas/:id" element={<CRMCampaignDetail />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/integrations" element={<Integrations />} />
+                      <Route path="/users" element={<UsersPage />} />
+                      <Route path="/audit" element={<Audit />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Layout>
