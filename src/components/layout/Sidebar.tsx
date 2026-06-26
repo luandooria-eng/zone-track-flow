@@ -4,38 +4,13 @@ import { cn } from '@/lib/utils';
 import { useSidebar } from '@/hooks/useSidebar';
 import {
   LayoutDashboard,
-  Users,
-  ShoppingCart,
-  Kanban,
-  Package,
-  Wallet,
-  LayoutGrid,
-  Settings,
-  Shield,
-  FileText,
   ChevronLeft,
   ChevronRight,
   Droplets,
-  MapPin,
-  TrendingUp,
-  Link2,
-  Grid3X3,
-  DollarSign,
-  Receipt,
-  Building2,
   Repeat,
-  ArrowLeftRight,
   BarChart3,
   Menu,
-  Clock,
-  Star,
-  Gift,
-  Ticket,
-  ListOrdered,
-  Sliders,
-  Trophy,
   Megaphone,
-  Headset,
   MessageCircle,
   Target,
   Send,
@@ -45,52 +20,12 @@ import { useWhatsAppConversations } from '@/hooks/useWhatsApp';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: Users, label: 'Clientes', path: '/customers' },
-  { icon: MapPin, label: 'Mapa Clientes', path: '/customers/map' },
-  { icon: ShoppingCart, label: 'Vendas', path: '/sales' },
-  { icon: Grid3X3, label: 'Vendas Diária', path: '/daily-grid' },
-  { icon: Kanban, label: 'Pipeline', path: '/pipeline' },
-  { icon: Package, label: 'Estoque', path: '/stock' },
-  { icon: Wallet, label: 'Carteira', path: '/credit' },
-  { icon: LayoutGrid, label: 'Painel Geral', path: '/overview' },
-  { icon: Clock, label: 'Horários de Pico', path: '/peak-hours' },
-  { icon: TrendingUp, label: 'Forecast', path: '/forecast' },
   { icon: MessageCircle, label: 'WhatsApp', path: '/whatsapp' },
   { icon: Target, label: 'CRM Funil', path: '/crm' },
   { icon: Send, label: 'Mensagens Auto', path: '/crm/mensagens' },
   { icon: BarChart3, label: 'CRM Métricas', path: '/crm/metricas' },
   { icon: Repeat, label: 'Reativação Auto', path: '/crm/reativacao' },
   { icon: Megaphone, label: 'CRM Campanhas', path: '/crm/campanhas' },
-];
-
-const loyaltyItems = [
-  { icon: Star, label: 'Dashboard', path: '/loyalty' },
-  { icon: ShoppingCart, label: 'Registrar Venda', path: '/loyalty/sale' },
-  { icon: Sliders, label: 'Regras de Pontos', path: '/loyalty/rules' },
-  { icon: Gift, label: 'Cupons', path: '/loyalty/coupons' },
-  { icon: Ticket, label: 'Vouchers', path: '/loyalty/vouchers' },
-  { icon: ListOrdered, label: 'Extrato', path: '/loyalty/extract' },
-  { icon: Users, label: 'Indicações', path: '/loyalty/referrals' },
-  { icon: Trophy, label: 'Gamificação', path: '/loyalty/gamification' },
-  { icon: Megaphone, label: 'Campanhas', path: '/loyalty/campaigns' },
-  { icon: BarChart3, label: 'Relatórios', path: '/loyalty/reports' },
-  { icon: Headset, label: 'Painel Operacional', path: '/loyalty/operators' },
-];
-
-const financeItems = [
-  { icon: DollarSign, label: 'Visão Geral', path: '/finance' },
-  { icon: BarChart3, label: 'DRE', path: '/finance/dre' },
-  { icon: Receipt, label: 'Contas a Pagar', path: '/finance/payables' },
-  { icon: ArrowLeftRight, label: 'Caixa', path: '/finance/cash' },
-  { icon: Building2, label: 'Fornecedores', path: '/finance/vendors' },
-  { icon: Repeat, label: 'Recorrências', path: '/finance/recurring' },
-];
-
-const configItems = [
-  { icon: Settings, label: 'Configurações', path: '/settings' },
-  { icon: Link2, label: 'Integrações', path: '/integrations' },
-  { icon: Shield, label: 'Usuários', path: '/users' },
-  { icon: FileText, label: 'Auditoria', path: '/audit' },
 ];
 
 interface MenuSectionProps {
@@ -229,33 +164,6 @@ export function Sidebar() {
               isCollapsed={isCollapsed}
               currentPath={location.pathname}
               badges={mainBadges}
-            />
-
-            <div className="mx-3 my-2 border-t border-sidebar-hover/20" />
-
-            <MenuSection
-              title="Fidelidade"
-              items={loyaltyItems}
-              isCollapsed={isCollapsed}
-              currentPath={location.pathname}
-            />
-
-            <div className="mx-3 my-2 border-t border-sidebar-hover/20" />
-
-            <MenuSection
-              title="Financeiro"
-              items={financeItems}
-              isCollapsed={isCollapsed}
-              currentPath={location.pathname}
-            />
-
-            <div className="mx-3 my-2 border-t border-sidebar-hover/20" />
-
-            <MenuSection
-              title="Sistema"
-              items={configItems}
-              isCollapsed={isCollapsed}
-              currentPath={location.pathname}
             />
           </nav>
         </ScrollArea>
