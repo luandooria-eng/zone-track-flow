@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import {
   CalendarIcon, Droplets, Flame, Send, MessageCircle, CheckCircle2, XCircle, Clock,
-  RefreshCw, Search, Target, Repeat,
+  RefreshCw, Search, Target, Repeat, ShoppingCart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
@@ -289,6 +289,7 @@ export default function AutoMessages() {
         <TabsList>
           <TabsTrigger value="messages">Mensagens no período ({messages.length})</TabsTrigger>
           <TabsTrigger value="cycles">Fluxo Reativação ({cycles.length})</TabsTrigger>
+          <TabsTrigger value="cart">Recuperação Carrinho</TabsTrigger>
         </TabsList>
 
         <TabsContent value="messages" className="mt-4 space-y-3">
@@ -411,7 +412,100 @@ export default function AutoMessages() {
             </CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="cart" className="mt-4">
+          <CartRecoveryTab />
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function CartRecoveryTab() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('cart_recovery_logs' as any)
+      .select('*')
+      .order('sent_at', { ascending: false })
+      .limit(500);
+    setLogs((data as any[]) ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const kpis = useMemo(() => {
+    const sent = logs.filter(l => l.status === 'sent').length;
+    const failed = logs.filter(l => l.status === 'failed').length;
+    const unique = new Set(logs.map(l => l.phone).filter(Boolean)).size;
+    return { total: logs.length, sent, failed, unique };
+  }, [logs]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Kpi icon={<ShoppingCart className="h-4 w-4 text-blue-500" />} label="Total disparos" value={kpis.total} />
+        <Kpi icon={<CheckCircle2 className="h-4 w-4 text-success" />} label="Enviados" value={kpis.sent} />
+        <Kpi icon={<XCircle className="h-4 w-4 text-destructive" />} label="Falhas" value={kpis.failed} />
+        <Kpi icon={<MessageCircle className="h-4 w-4" />} label="Clientes únicos" value={kpis.unique} />
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Telefone</TableHead>
+                  <TableHead>Cart ID</TableHead>
+                  <TableHead>Link</TableHead>
+                  <TableHead>Enviado</TableHead>
+                  <TableHead>Mensagem</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                ) : logs.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum disparo ainda. Configure a integração UoouShop em Integrações.</TableCell></TableRow>
+                ) : logs.map((l: any) => (
+                  <TableRow key={l.id}>
+                    <TableCell>
+                      {l.status === 'sent'
+                        ? <Badge variant="default">Enviado</Badge>
+                        : <Badge variant="destructive">Falha</Badge>}
+                    </TableCell>
+                    <TableCell className="font-medium">{l.customer_name || '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">{l.phone || '—'}</TableCell>
+                    <TableCell className="font-mono text-xs max-w-[120px] truncate" title={l.cart_id}>{l.cart_id || '—'}</TableCell>
+                    <TableCell>
+                      {l.cart_link
+                        ? <a href={l.cart_link} target="_blank" rel="noopener noreferrer" className="text-primary underline text-xs">Abrir</a>
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {l.sent_at ? format(new Date(l.sent_at), 'dd/MM/yy HH:mm') : '—'}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate text-xs" title={l.message_sent}>{l.message_sent || '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

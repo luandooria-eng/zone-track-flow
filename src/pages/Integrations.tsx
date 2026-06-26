@@ -19,7 +19,11 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  ShoppingCart,
+  Save,
 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -325,10 +329,169 @@ const webhookEvents = [
   { value: 'customer.created', label: 'Cliente Cadastrado' },
 ];
 
+// ---- UoouShop Cart Recovery Config Dialog ----
+function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [token, setToken] = useState('');
+  const [channelCode, setChannelCode] = useState('');
+  const [webhookSecret, setWebhookSecret] = useState('');
+  const [template, setTemplate] = useState('');
+  const [active, setActive] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+
+  const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/uoou-cart-webhook`;
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    supabase
+      .from('cart_recovery_config' as any)
+      .select('*')
+      .eq('id', '00000000-0000-0000-0000-000000000098')
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data) {
+          setToken(data.token || '');
+          setChannelCode(data.channel_code || '');
+          setWebhookSecret(data.webhook_secret || '');
+          setTemplate(data.message_template || '');
+          setActive(data.active ?? true);
+        }
+        setLoading(false);
+      });
+  }, [open]);
+
+  async function handleSave() {
+    if (!template.trim()) { toast.error('Template de mensagem obrigatório'); return; }
+    setSaving(true);
+    await supabase
+      .from('cart_recovery_config' as any)
+      .update({ token, channel_code: channelCode, webhook_secret: webhookSecret, message_template: template, active, updated_at: new Date().toISOString() })
+      .eq('id', '00000000-0000-0000-0000-000000000098');
+    setSaving(false);
+    toast.success('Configuração salva!');
+    onClose();
+  }
+
+  if (!open) return null;
+
+  const variables = ['{nome}', '{link}', '{produtos}', '{email}'];
+
+  return (
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <ShoppingCart className="h-5 w-5 text-blue-500" />
+          Recuperação de Carrinho — UoouShop
+        </DialogTitle>
+      </DialogHeader>
+
+      {loading ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">Carregando...</div>
+      ) : (
+        <div className="space-y-5 pt-2">
+
+          {/* Webhook URL */}
+          <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4 space-y-3">
+            <p className="text-sm font-medium">1. Cole esta URL no campo "URL" do Webhook no UoouShop</p>
+            <CopyField label="URL do Webhook" value={webhookUrl} hint="Configure em: Configuração → Webhooks → Criar Webhook → Carrinho" />
+          </div>
+
+          {/* Secret */}
+          <div className="space-y-2">
+            <Label>Segredo do Webhook (Cabeçalho de segurança)</Label>
+            <p className="text-xs text-muted-foreground">
+              No UoouShop em "Cabeçalhos", adicione: <code className="bg-muted px-1 rounded">x-webhook-secret</code> com o valor abaixo.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                type={showSecret ? 'text' : 'password'}
+                value={webhookSecret}
+                onChange={e => setWebhookSecret(e.target.value)}
+                className="flex-1 font-mono text-xs"
+              />
+              <Button variant="outline" size="icon" onClick={() => setShowSecret(v => !v)}>
+                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+              <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(webhookSecret); toast.success('Copiado!'); }}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* API Credentials */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Token da API UoouShop</Label>
+              <Input placeholder="Token de integração" value={token} onChange={e => setToken(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Channel Code</Label>
+              <Input placeholder="Código do canal" value={channelCode} onChange={e => setChannelCode(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Message Template */}
+          <div className="space-y-2">
+            <Label>Template da Mensagem</Label>
+            <p className="text-xs text-muted-foreground">
+              Use as variáveis abaixo. Você pode editar este texto a qualquer momento para testar diferentes abordagens e melhorar a taxa de conversão.
+            </p>
+            <div className="flex flex-wrap gap-1 mb-2">
+              {variables.map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded hover:bg-primary/20 transition-colors font-mono"
+                  onClick={() => setTemplate(t => t + v)}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <Textarea
+              rows={6}
+              placeholder="Ex: Olá {nome}! Você deixou produtos no carrinho 👉 {link}"
+              value={template}
+              onChange={e => setTemplate(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              <strong>{'{nome}'}</strong> = nome do cliente &nbsp;·&nbsp;
+              <strong>{'{link}'}</strong> = link do carrinho &nbsp;·&nbsp;
+              <strong>{'{produtos}'}</strong> = lista de produtos &nbsp;·&nbsp;
+              <strong>{'{email}'}</strong> = e-mail
+            </p>
+          </div>
+
+          {/* Active toggle */}
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">Ativo</p>
+              <p className="text-xs text-muted-foreground">Quando desligado, os webhooks chegam mas nenhuma mensagem é enviada.</p>
+            </div>
+            <Switch checked={active} onCheckedChange={setActive} />
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
+            <Button className="flex-1 gap-2" onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4" />
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </DialogContent>
+  );
+}
+
 export default function Integrations() {
   const [webhooks, setWebhooks] = useState(mockWebhooks);
   const [isAddWebhookOpen, setIsAddWebhookOpen] = useState(false);
   const [isZApiOpen, setIsZApiOpen] = useState(false);
+  const [isUoouOpen, setIsUoouOpen] = useState(false);
   const [newWebhook, setNewWebhook] = useState({ name: '', url: '', events: [] as string[] });
 
   const getStatusBadge = (status: Integration['status']) => {
@@ -400,6 +563,10 @@ export default function Integrations() {
         <ZApiConfigDialog open={isZApiOpen} onClose={() => setIsZApiOpen(false)} />
       </Dialog>
 
+      <Dialog open={isUoouOpen} onOpenChange={setIsUoouOpen}>
+        <UoouShopConfigDialog open={isUoouOpen} onClose={() => setIsUoouOpen(false)} />
+      </Dialog>
+
       <Tabs defaultValue="integrations">
         <TabsList>
           <TabsTrigger value="integrations">Integrações</TabsTrigger>
@@ -408,6 +575,31 @@ export default function Integrations() {
         </TabsList>
 
         <TabsContent value="integrations" className="mt-4 space-y-6">
+          {/* UoouShop — featured */}
+          <div>
+            <h3 className="font-semibold mb-3">E-commerce</h3>
+            <Card className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
+                    <ShoppingCart className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium">UoouShop</h4>
+                    <Badge className="bg-success/20 text-success border-0">Conectado</Badge>
+                  </div>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Recuperação automática de carrinhos abandonados via WhatsApp. Configure o template de mensagem e acompanhe as conversões.
+              </p>
+              <Button variant="outline" size="sm" className="gap-1" onClick={() => setIsUoouOpen(true)}>
+                <Settings className="h-3 w-3" />
+                Configurar
+              </Button>
+            </Card>
+          </div>
+
           {categories.map((category) => {
             const categoryIntegrations = integrations.filter(
               (i) => i.category === category.key
