@@ -380,6 +380,78 @@ export type Database = {
         }
         Relationships: []
       }
+      cart_recovery_config: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          message_template: string
+          test_mode: boolean
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          message_template?: string
+          test_mode?: boolean
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          message_template?: string
+          test_mode?: boolean
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
+      cart_recovery_logs: {
+        Row: {
+          cart_id: string | null
+          cart_link: string | null
+          created_at: string
+          customer_name: string | null
+          email: string | null
+          error_message: string | null
+          id: string
+          message_sent: string | null
+          phone: string | null
+          products: Json | null
+          status: string
+        }
+        Insert: {
+          cart_id?: string | null
+          cart_link?: string | null
+          created_at?: string
+          customer_name?: string | null
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          message_sent?: string | null
+          phone?: string | null
+          products?: Json | null
+          status?: string
+        }
+        Update: {
+          cart_id?: string | null
+          cart_link?: string | null
+          created_at?: string
+          customer_name?: string | null
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          message_sent?: string | null
+          phone?: string | null
+          products?: Json | null
+          status?: string
+        }
+        Relationships: []
+      }
       consumption_settings: {
         Row: {
           comparison_months: number
