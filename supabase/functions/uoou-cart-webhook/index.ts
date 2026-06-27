@@ -33,7 +33,6 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  // Load config
   const { data: config, error: configErr } = await supabase
     .from("cart_recovery_config")
     .select("*")
@@ -44,20 +43,14 @@ Deno.serve(async (req) => {
   if (!config.active) return json({ ok: true, skipped: "inactive" });
   const testMode: boolean = config.test_mode ?? false;
 
-  // Validate webhook secret (optional but recommended)
   const incomingSecret = req.headers.get("x-webhook-secret") ?? req.headers.get("authorization");
   if (config.webhook_secret && incomingSecret !== config.webhook_secret) {
     return json({ error: "Unauthorized" }, 401);
   }
 
   let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return json({ error: "Invalid JSON" }, 400);
-  }
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
 
-  // Normalise UoouShop payload — they may send different shapes
   const cartId: string = body.id ?? body.cart_id ?? body.cartId ?? "";
   const customerName: string = body.name ?? body.customer?.name ?? body.contact?.name ?? "";
   const rawPhone: string = body.phone ?? body.contact?.phone ?? body.customer?.phone ?? body.celular ?? "";
@@ -67,32 +60,18 @@ Deno.serve(async (req) => {
 
   if (!rawPhone) return json({ error: "No phone in payload" }, 400);
 
-  // Avoid sending duplicate messages for the same cart
   const { count } = await supabase
     .from("cart_recovery_logs")
     .select("id", { count: "exact", head: true })
     .eq("cart_id", cartId)
     .eq("status", "sent");
 
-  if ((count ?? 0) > 0) {
-    return json({ ok: true, skipped: "already_sent", cart_id: cartId });
-  }
+  if ((count ?? 0) > 0) return json({ ok: true, skipped: "already_sent", cart_id: cartId });
 
-  // Build message from template
-  const productList = products
-    .map((p: any) => `• ${p.name ?? p.title ?? p.description ?? "Produto"}`)
-    .join("\n");
-
-  const vars: Record<string, string> = {
-    nome: customerName || "Cliente",
-    link: cartLink,
-    produtos: productList || "",
-    email,
-  };
-
+  const productList = products.map((p: any) => `• ${p.name ?? p.title ?? "Produto"}`).join("\n");
+  const vars: Record<string, string> = { nome: customerName || "Cliente", link: cartLink, produtos: productList || "", email };
   const message = buildMessage(config.message_template, vars);
 
-  // Load Z-API config
   const { data: zapiConfig } = await supabase
     .from("whatsapp_config")
     .select("instance_id, token")
@@ -103,9 +82,7 @@ Deno.serve(async (req) => {
   let errorMessage: string | null = null;
 
   if (testMode) {
-    // In test mode: just log, don't send
     status = "test";
-    errorMessage = null;
   } else if (!zapiConfig?.instance_id || !zapiConfig?.token) {
     status = "failed";
     errorMessage = "Z-API not configured";
@@ -115,36 +92,13 @@ Deno.serve(async (req) => {
     const zapiUrl = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
     const zapiHeaders: Record<string, string> = { "Content-Type": "application/json" };
     if (clientToken) zapiHeaders["Client-Token"] = clientToken;
-
     try {
-      const res = await fetch(zapiUrl, {
-        method: "POST",
-        headers: zapiHeaders,
-        body: JSON.stringify({ phone, message }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        status = "failed";
-        errorMessage = JSON.stringify(err);
-      }
-    } catch (err) {
-      status = "failed";
-      errorMessage = String(err);
-    }
+      const res = await fetch(zapiUrl, { method: "POST", headers: zapiHeaders, body: JSON.stringify({ phone, message }) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); status = "failed"; errorMessage = JSON.stringify(err); }
+    } catch (err) { status = "failed"; errorMessage = String(err); }
   }
 
-  // Log attempt
-  await supabase.from("cart_recovery_logs").insert({
-    cart_id: cartId,
-    customer_name: customerName,
-    phone: rawPhone,
-    email,
-    cart_link: cartLink,
-    products: products as any,
-    message_sent: message,
-    status,
-    error_message: errorMessage,
-  });
+  await supabase.from("cart_recovery_logs").insert({ cart_id: cartId, customer_name: customerName, phone: rawPhone, email, cart_link: cartLink, products: products as any, message_sent: message, status, error_message: errorMessage });
 
   return json({ ok: true, status, test_mode: testMode, cart_id: cartId });
 });
