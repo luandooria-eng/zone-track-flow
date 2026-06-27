@@ -351,12 +351,15 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
       .eq('id', '00000000-0000-0000-0000-000000000098')
       .maybeSingle()
       .then(({ data }: any) => {
+        const generated = crypto.randomUUID();
         if (data) {
           setToken(data.token || '');
           setChannelCode(data.channel_code || '');
-          setWebhookSecret(data.webhook_secret || '');
+          setWebhookSecret(data.webhook_secret || generated);
           setTemplate(data.message_template || '');
           setActive(data.active ?? true);
+        } else {
+          setWebhookSecret(generated);
         }
         setLoading(false);
       });
