@@ -336,6 +336,7 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
   const [webhookSecret, setWebhookSecret] = useState('');
   const [template, setTemplate] = useState('');
   const [active, setActive] = useState(true);
+  const [testMode, setTestMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
@@ -358,6 +359,7 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
           setWebhookSecret(data.webhook_secret || generated);
           setTemplate(data.message_template || '');
           setActive(data.active ?? true);
+          setTestMode(data.test_mode ?? false);
         } else {
           setWebhookSecret(generated);
         }
@@ -370,7 +372,7 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
     setSaving(true);
     await supabase
       .from('cart_recovery_config' as any)
-      .update({ token, channel_code: channelCode, webhook_secret: webhookSecret, message_template: template, active, updated_at: new Date().toISOString() })
+      .update({ token, channel_code: channelCode, webhook_secret: webhookSecret, message_template: template, active, test_mode: testMode, updated_at: new Date().toISOString() })
       .eq('id', '00000000-0000-0000-0000-000000000098');
     setSaving(false);
     toast.success('Configuração salva!');
@@ -466,6 +468,19 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
               <strong>{'{produtos}'}</strong> = lista de produtos &nbsp;·&nbsp;
               <strong>{'{email}'}</strong> = e-mail
             </p>
+          </div>
+
+          {/* Test mode toggle */}
+          <div className="flex items-center justify-between rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
+            <div>
+              <p className="text-sm font-medium flex items-center gap-2">
+                🧪 Modo Teste
+              </p>
+              <p className="text-xs text-muted-foreground">
+                O webhook recebe e registra os dados normalmente, mas <strong>não envia nenhuma mensagem</strong>. Use para validar que os dados chegam certos antes de ativar de verdade.
+              </p>
+            </div>
+            <Switch checked={testMode} onCheckedChange={setTestMode} />
           </div>
 
           {/* Active toggle */}

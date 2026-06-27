@@ -42,6 +42,7 @@ Deno.serve(async (req) => {
 
   if (configErr || !config) return json({ error: "Config not found" }, 500);
   if (!config.active) return json({ ok: true, skipped: "inactive" });
+  const testMode: boolean = config.test_mode ?? false;
 
   // Validate webhook secret (optional but recommended)
   const incomingSecret = req.headers.get("x-webhook-secret") ?? req.headers.get("authorization");
@@ -101,7 +102,11 @@ Deno.serve(async (req) => {
   let status = "sent";
   let errorMessage: string | null = null;
 
-  if (!zapiConfig?.instance_id || !zapiConfig?.token) {
+  if (testMode) {
+    // In test mode: just log, don't send
+    status = "test";
+    errorMessage = null;
+  } else if (!zapiConfig?.instance_id || !zapiConfig?.token) {
     status = "failed";
     errorMessage = "Z-API not configured";
   } else {
@@ -141,5 +146,5 @@ Deno.serve(async (req) => {
     error_message: errorMessage,
   });
 
-  return json({ ok: true, status, cart_id: cartId });
+  return json({ ok: true, status, test_mode: testMode, cart_id: cartId });
 });

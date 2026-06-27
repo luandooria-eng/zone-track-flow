@@ -485,6 +485,8 @@ function CartRecoveryTab() {
                     <TableCell>
                       {l.status === 'sent'
                         ? <Badge variant="default">Enviado</Badge>
+                        : l.status === 'test'
+                        ? <Badge className="bg-yellow-500/20 text-yellow-600 border-0">🧪 Teste</Badge>
                         : <Badge variant="destructive">Falha</Badge>}
                     </TableCell>
                     <TableCell className="font-medium">{l.customer_name || '—'}</TableCell>
