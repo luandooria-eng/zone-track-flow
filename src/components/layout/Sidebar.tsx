@@ -14,6 +14,10 @@ import {
   MessageCircle,
   Target,
   Send,
+  Settings,
+  Link2,
+  Shield,
+  FileText,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWhatsAppConversations } from '@/hooks/useWhatsApp';
@@ -26,6 +30,13 @@ const menuItems = [
   { icon: BarChart3, label: 'CRM Métricas', path: '/crm/metricas' },
   { icon: Repeat, label: 'Reativação Auto', path: '/crm/reativacao' },
   { icon: Megaphone, label: 'CRM Campanhas', path: '/crm/campanhas' },
+];
+
+const configItems = [
+  { icon: Settings, label: 'Configurações', path: '/settings' },
+  { icon: Link2, label: 'Integrações', path: '/integrations' },
+  { icon: Shield, label: 'Usuários', path: '/users' },
+  { icon: FileText, label: 'Auditoria', path: '/audit' },
 ];
 
 interface MenuSectionProps {
@@ -164,6 +175,15 @@ export function Sidebar() {
               isCollapsed={isCollapsed}
               currentPath={location.pathname}
               badges={mainBadges}
+            />
+
+            <div className="mx-3 my-2 border-t border-sidebar-hover/20" />
+
+            <MenuSection
+              title="Sistema"
+              items={configItems}
+              isCollapsed={isCollapsed}
+              currentPath={location.pathname}
             />
           </nav>
         </ScrollArea>
