@@ -63,7 +63,6 @@ export interface CRMTrigger {
   delay_minutes: number;
   is_active: boolean;
   created_at: string;
-  whatsapp_template_id: string | null;
 }
 
 export interface CRMRecurrenceRule {

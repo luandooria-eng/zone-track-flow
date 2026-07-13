@@ -18,17 +18,15 @@ import {
   Link2,
   Shield,
   FileText,
+  ShoppingCart,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWhatsAppConversations } from '@/hooks/useWhatsApp';
 
 const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: MessageCircle, label: 'WhatsApp', path: '/whatsapp' },
   { icon: Target, label: 'CRM Funil', path: '/crm' },
-  { icon: Send, label: 'Mensagens Auto', path: '/crm/mensagens' },
-  { icon: BarChart3, label: 'CRM Métricas', path: '/crm/metricas' },
-  { icon: Repeat, label: 'Reativação Auto', path: '/crm/reativacao' },
+  { icon: ShoppingCart, label: 'Recuperação Carrinho', path: '/carrinho' },
   { icon: Megaphone, label: 'CRM Campanhas', path: '/crm/campanhas' },
 ];
 
@@ -141,15 +139,15 @@ export function Sidebar() {
         <div className="flex-shrink-0 flex h-14 items-center justify-between px-3 border-b border-sidebar-hover/20">
           <Link to="/" className="flex items-center gap-2.5 min-w-0">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shrink-0">
-              <Droplets className="h-5 w-5 text-primary-foreground" />
+              <ShoppingCart className="h-5 w-5 text-primary-foreground" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0">
-                <span className="text-sm font-bold text-white truncate leading-tight">
-                  Seu Geraldo
+                <span className="text-[13px] font-bold text-white truncate leading-tight">
+                  Recuperação de
                 </span>
-                <span className="text-[10px] text-sidebar-text-muted truncate">
-                  Gás e Água
+                <span className="text-[13px] font-bold text-primary truncate leading-tight">
+                  Carrinho
                 </span>
               </div>
             )}

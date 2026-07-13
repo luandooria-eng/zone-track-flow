@@ -105,8 +105,20 @@ Deno.serve(async (req) => {
 
     if (type === "MessageStatusCallback" || type === "ReadCallback" || type === "DeliveryCallback") {
       const messageId = payload.messageId || payload.id;
-      const newStatus = type === "ReadCallback" ? "read" : "delivered";
-      if (messageId) await supabase.from("whatsapp_messages").update({ status: newStatus }).eq("message_id", messageId);
+      // Z-API may send MessageStatusCallback with status field: "READ", "DELIVERED", "RECEIVED", etc.
+      const statusField = String(payload.status || payload.deliveryStatus || "").toUpperCase();
+      const isRead = type === "ReadCallback" || statusField === "READ" || statusField === "VISUALIZED";
+      const isDelivered = type === "DeliveryCallback" || statusField === "DELIVERED" || statusField === "RECEIVED";
+      const newStatus = isRead ? "read" : isDelivered ? "delivered" : null;
+      if (messageId && newStatus) {
+        const nowIso = new Date().toISOString();
+        await Promise.all([
+          supabase.from("whatsapp_messages").update({ status: newStatus }).eq("message_id", messageId),
+          newStatus === "read"
+            ? supabase.from("cart_recovery_logs").update({ read_at: nowIso }).eq("message_id", messageId).is("read_at", null)
+            : supabase.from("cart_recovery_logs").update({ delivered_at: nowIso }).eq("message_id", messageId).is("delivered_at", null),
+        ]);
+      }
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -228,8 +240,21 @@ Deno.serve(async (req) => {
               ...(chatLidRaw ? { chat_lid: chatLidRaw } : {}),
             }).eq("id", existingConv.id),
           ]);
-        } else {
-          console.log("fromMe: no matching conversation for chat_lid=", chatLidRaw, "phone=", rawPhoneRaw);
+        } else if (rawPhoneRaw && !String(rawPhoneRaw).includes("@g.us")) {
+          // No conversation yet — create one so outbound messages appear in inbox
+          const phone = normalizePhone(rawPhoneRaw);
+          if (phone) {
+            const { data: newConv } = await supabase.from("whatsapp_conversations").upsert(
+              { phone, contact_name: null, last_message: content.slice(0, 500), last_message_at: nowIso, unread_count: 0, status: "open", ...(chatLidRaw ? { chat_lid: chatLidRaw } : {}) },
+              { onConflict: "phone", ignoreDuplicates: false },
+            ).select("id").single();
+            if (newConv?.id) {
+              await supabase.from("whatsapp_messages").upsert(
+                { conversation_id: newConv.id, message_id: messageId, direction: "outbound", content, type: msgType, media_url: mediaUrl, status: "sent" },
+                { onConflict: "message_id", ignoreDuplicates: true },
+              );
+            }
+          }
         }
       }
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -317,10 +342,18 @@ Deno.serve(async (req) => {
         if (wait) wait(autoLeadTask); else autoLeadTask.catch(() => {});
       }
 
-      await supabase.from("whatsapp_messages").upsert(
-        { conversation_id: convId, message_id: messageId, direction: "inbound", content, type: msgType, media_url: mediaUrl, status: "received" },
-        { onConflict: "message_id", ignoreDuplicates: true },
-      );
+      if (messageId) {
+        const { error: msgErr } = await supabase.from("whatsapp_messages").upsert(
+          { conversation_id: convId, message_id: messageId, direction: "inbound", content, type: msgType, media_url: mediaUrl, status: "received" },
+          { onConflict: "message_id", ignoreDuplicates: true },
+        );
+        if (msgErr) console.error("whatsapp_messages upsert error:", msgErr);
+      } else {
+        const { error: msgErr } = await supabase.from("whatsapp_messages").insert(
+          { conversation_id: convId, message_id: null, direction: "inbound", content, type: msgType, media_url: mediaUrl, status: "received" },
+        );
+        if (msgErr) console.error("whatsapp_messages insert error:", msgErr);
+      }
 
       // on_message_received triggers (fire-and-forget)
       const onMsgTask = (async () => {

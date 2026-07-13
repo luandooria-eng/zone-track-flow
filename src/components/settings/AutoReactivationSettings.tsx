@@ -8,7 +8,6 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2, Play, Droplet, Flame } from "lucide-react";
-import { WhatsAppTemplateSelect } from "@/components/whatsapp/WhatsAppTemplateSelect";
 
 type Rule = {
   id: string;
@@ -24,8 +23,6 @@ type Rule = {
   send_window_start: string;
   send_window_end: string;
   rate_limit_per_run: number;
-  whatsapp_template_id: string | null;
-  followup_whatsapp_template_id: string | null;
 };
 
 export function AutoReactivationSettings() {
@@ -63,8 +60,6 @@ export function AutoReactivationSettings() {
         send_window_start: r.send_window_start,
         send_window_end: r.send_window_end,
         rate_limit_per_run: r.rate_limit_per_run,
-        whatsapp_template_id: r.whatsapp_template_id,
-        followup_whatsapp_template_id: r.followup_whatsapp_template_id,
       })
       .eq("id", r.id);
     setSaving(null);
@@ -128,11 +123,6 @@ export function AutoReactivationSettings() {
               <p className="text-xs text-muted-foreground mt-1">
                 Variáveis: <code>{"{{nome}}"}</code>, <code>{"{{primeiro_nome}}"}</code>, <code>{"{{dias_sem_comprar}}"}</code>
               </p>
-              <Label className="mt-2 block">Template Meta (fallback fora da janela de 24h)</Label>
-              <WhatsAppTemplateSelect
-                value={r.whatsapp_template_id}
-                onChange={(v) => update(r.id, { whatsapp_template_id: v })}
-              />
             </div>
             <div>
               <Label>Mensagem de follow-up (após 1ª tentativa)</Label>
@@ -140,11 +130,6 @@ export function AutoReactivationSettings() {
                 value={r.followup_message_template || ""}
                 onChange={(e) => update(r.id, { followup_message_template: e.target.value })}
                 rows={3}
-              />
-              <Label className="mt-2 block">Template Meta para follow-up (fallback fora da janela de 24h)</Label>
-              <WhatsAppTemplateSelect
-                value={r.followup_whatsapp_template_id}
-                onChange={(v) => update(r.id, { followup_whatsapp_template_id: v })}
               />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

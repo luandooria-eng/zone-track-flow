@@ -88,8 +88,8 @@ export function Topbar() {
     return `${format(from, 'dd/MM', { locale: ptBR })} - ${format(to || from, 'dd/MM/yyyy', { locale: ptBR })}`;
   };
 
-  // Don't render topbar on daily grid pages
-  if (isDailyGridPage) {
+  // Don't render topbar on daily grid or cart recovery pages
+  if (isDailyGridPage || location.pathname === '/carrinho') {
     return null;
   }
 

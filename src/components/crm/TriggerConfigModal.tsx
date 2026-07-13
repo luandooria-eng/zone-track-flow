@@ -35,7 +35,6 @@ import {
 import { cn } from '@/lib/utils';
 import type { CRMStage, CRMTrigger } from '@/hooks/useCRMFunnel';
 import { useCRMTriggers, useUpsertTrigger, useToggleTrigger, useDeleteTrigger } from '@/hooks/useCRMFunnel';
-import { WhatsAppTemplateSelect } from '@/components/whatsapp/WhatsAppTemplateSelect';
 
 // ─── Types & Helpers ──────────────────────────────────────────────────────────
 
@@ -119,7 +118,6 @@ export function TriggerConfigModal({ open, onOpenChange, stages }: TriggerConfig
         tags: [],
         filter_tags: [],
         target_stage_id: null,
-        whatsapp_template_id: null,
       },
     });
     setExpandedStage(stageId);
@@ -535,11 +533,6 @@ function TriggerEditor({
             placeholder={`Olá {{name}}! 👋 Estamos aqui para ajudar...`}
             rows={5}
             className="text-sm resize-none"
-          />
-          <Label className="text-xs">Template Meta (fallback fora da janela de 24h)</Label>
-          <WhatsAppTemplateSelect
-            value={trigger.whatsapp_template_id ?? null}
-            onChange={(v) => set('whatsapp_template_id', v)}
           />
         </div>
       )}

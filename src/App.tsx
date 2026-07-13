@@ -23,6 +23,7 @@ import AutoMessages from "./pages/AutoMessages";
 import CRMCampaigns from "./pages/CRMCampaigns";
 import CRMCampaignNew from "./pages/CRMCampaignNew";
 import CRMCampaignDetail from "./pages/CRMCampaignDetail";
+import CartRecovery from "./pages/CartRecovery";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -53,7 +54,7 @@ const App = () => (
                 <ProtectedRoute>
                   <Layout>
                     <Routes>
-                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/" element={<WhatsAppInbox />} />
                       <Route path="/whatsapp" element={<WhatsAppInbox />} />
                       <Route path="/crm" element={<CRMFunnel />} />
                       <Route path="/crm/metricas" element={<CRMMetrics />} />
@@ -62,6 +63,7 @@ const App = () => (
                       <Route path="/crm/campanhas" element={<CRMCampaigns />} />
                       <Route path="/crm/campanhas/nova" element={<CRMCampaignNew />} />
                       <Route path="/crm/campanhas/:id" element={<CRMCampaignDetail />} />
+                      <Route path="/carrinho" element={<CartRecovery />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/integrations" element={<Integrations />} />
                       <Route path="/users" element={<UsersPage />} />

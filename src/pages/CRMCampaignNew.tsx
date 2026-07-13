@@ -9,10 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Trash2, Upload, ArrowLeft, Calendar, Users, MessageSquare, Send } from 'lucide-react';
+import { Plus, Trash2, Upload, ArrowLeft, Calendar, Users, MessageSquare, Send, Zap } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { WhatsAppTemplateSelect } from '@/components/whatsapp/WhatsAppTemplateSelect';
 
 type Source = 'lead' | 'customer' | 'csv';
 type Recipient = {
@@ -54,8 +53,8 @@ export default function CRMCampaignNew() {
   const [customerSearch, setCustomerSearch] = useState('');
 
   // Step 3 — templates
-  const [templates, setTemplates] = useState<{ label: string; body: string; whatsapp_template_id: string | null }[]>([
-    { label: 'A', body: 'Olá {{primeiro_nome}}, tudo bem? Temos uma oferta especial para você!', whatsapp_template_id: null },
+  const [templates, setTemplates] = useState<{ label: string; body: string }[]>([
+    { label: 'A', body: 'Olá {{primeiro_nome}}, tudo bem? Temos uma oferta especial para você!' },
   ]);
 
   useEffect(() => {
@@ -193,10 +192,7 @@ export default function CRMCampaignNew() {
       const { data: createdTemplates, error: tErr } = await supabase
         .from('crm_campaign_templates')
         .insert(
-          templates.map((t) => ({
-            campaign_id: campaign.id, label: t.label, body: t.body, weight: 1,
-            whatsapp_template_id: t.whatsapp_template_id,
-          }))
+          templates.map((t) => ({ campaign_id: campaign.id, label: t.label, body: t.body, weight: 1 }))
         )
         .select();
       if (tErr) throw tErr;
@@ -223,6 +219,82 @@ export default function CRMCampaignNew() {
       }
 
       toast.success('Campanha agendada!');
+      nav(`/crm/campanhas/${campaign.id}`);
+    } catch (e: any) {
+      console.error(e);
+      toast.error('Erro: ' + (e.message || String(e)));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSendNow() {
+    if (!name.trim()) return toast.error('Informe o nome da campanha');
+    if (recipientsResolved.length === 0) return toast.error('Selecione ao menos 1 destinatário');
+    if (templates.length === 0 || templates.some((t) => !t.body.trim()))
+      return toast.error('Preencha as variantes de mensagem');
+
+    setSaving(true);
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      const now = new Date().toISOString();
+
+      const { data: campaign, error: cErr } = await supabase
+        .from('crm_campaigns')
+        .insert({
+          name,
+          status: 'sending',
+          scheduled_at: now,
+          rate_limit_per_min: rateLimit,
+          send_window_start: winStart,
+          send_window_end: winEnd,
+          attribution_days: attribDays,
+          audience_summary: {
+            leads_count: selectedLeadIds.size,
+            customers_count: selectedCustomerIds.size,
+            csv_count: csvRecipients.length,
+            total_dedup: recipientsResolved.length,
+          },
+          created_by: user.user?.id,
+        })
+        .select()
+        .single();
+      if (cErr) throw cErr;
+
+      const { data: createdTemplates, error: tErr } = await supabase
+        .from('crm_campaign_templates')
+        .insert(
+          templates.map((t) => ({ campaign_id: campaign.id, label: t.label, body: t.body, weight: 1 }))
+        )
+        .select();
+      if (tErr) throw tErr;
+
+      const recipientRows = recipientsResolved.map((r, idx) => ({
+        campaign_id: campaign.id,
+        source: r.source,
+        lead_id: r.lead_id || null,
+        customer_id: r.customer_id || null,
+        name: r.name,
+        phone: r.phone,
+        phone_normalized: normalizePhone(r.phone),
+        template_id: createdTemplates[idx % createdTemplates.length].id,
+        variables: r.variables || {},
+      }));
+
+      for (let i = 0; i < recipientRows.length; i += 500) {
+        const { error: rErr } = await supabase
+          .from('crm_campaign_recipients')
+          .insert(recipientRows.slice(i, i + 500));
+        if (rErr) throw rErr;
+      }
+
+      // Trigger dispatcher Edge Function immediately
+      const { error: fnErr } = await supabase.functions.invoke('crm-campaign-dispatcher', {
+        body: { campaign_id: campaign.id },
+      });
+      if (fnErr) console.warn('Dispatcher invoke warning:', fnErr.message);
+
+      toast.success('Campanha iniciada! Os envios começarão em instantes.');
       nav(`/crm/campanhas/${campaign.id}`);
     } catch (e: any) {
       console.error(e);
@@ -477,15 +549,6 @@ export default function CRMCampaignNew() {
                   setTemplates(next);
                 }}
               />
-              <Label className="text-xs">Template Meta (fallback fora da janela de 24h)</Label>
-              <WhatsAppTemplateSelect
-                value={t.whatsapp_template_id}
-                onChange={(v) => {
-                  const next = [...templates];
-                  next[idx] = { ...t, whatsapp_template_id: v };
-                  setTemplates(next);
-                }}
-              />
             </div>
           ))}
           {templates.length < 3 && (
@@ -495,7 +558,7 @@ export default function CRMCampaignNew() {
               onClick={() =>
                 setTemplates([
                   ...templates,
-                  { label: String.fromCharCode(65 + templates.length), body: '', whatsapp_template_id: null },
+                  { label: String.fromCharCode(65 + templates.length), body: '' },
                 ])
               }
             >
@@ -533,9 +596,27 @@ export default function CRMCampaignNew() {
               </div>
             </div>
           </div>
-          <Button onClick={handleSave} disabled={saving} className="w-full" size="lg">
-            {saving ? 'Salvando...' : 'Agendar campanha'}
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              onClick={handleSendNow}
+              disabled={saving}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              size="lg"
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              {saving ? 'Enviando...' : 'Enviar agora'}
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={saving}
+              variant="outline"
+              className="flex-1"
+              size="lg"
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              {saving ? 'Salvando...' : 'Agendar'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

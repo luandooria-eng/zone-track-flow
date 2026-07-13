@@ -331,7 +331,6 @@ export type Database = {
           created_at: string
           followup_interval_days: number
           followup_message_template: string | null
-          followup_whatsapp_template_id: string | null
           id: string
           is_active: boolean
           max_attempts: number
@@ -344,13 +343,11 @@ export type Database = {
           send_window_start: string
           tolerance_days: number
           updated_at: string
-          whatsapp_template_id: string | null
         }
         Insert: {
           created_at?: string
           followup_interval_days?: number
           followup_message_template?: string | null
-          followup_whatsapp_template_id?: string | null
           id?: string
           is_active?: boolean
           max_attempts?: number
@@ -363,13 +360,11 @@ export type Database = {
           send_window_start?: string
           tolerance_days?: number
           updated_at?: string
-          whatsapp_template_id?: string | null
         }
         Update: {
           created_at?: string
           followup_interval_days?: number
           followup_message_template?: string | null
-          followup_whatsapp_template_id?: string | null
           id?: string
           is_active?: boolean
           max_attempts?: number
@@ -382,82 +377,6 @@ export type Database = {
           send_window_start?: string
           tolerance_days?: number
           updated_at?: string
-          whatsapp_template_id?: string | null
-        }
-        Relationships: []
-      }
-      cart_recovery_config: {
-        Row: {
-          active: boolean
-          created_at: string
-          id: string
-          message_template: string
-          test_mode: boolean
-          updated_at: string
-          webhook_secret: string | null
-          whatsapp_template_id: string | null
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          message_template?: string
-          test_mode?: boolean
-          updated_at?: string
-          webhook_secret?: string | null
-          whatsapp_template_id?: string | null
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          message_template?: string
-          test_mode?: boolean
-          updated_at?: string
-          whatsapp_template_id?: string | null
-          webhook_secret?: string | null
-        }
-        Relationships: []
-      }
-      cart_recovery_logs: {
-        Row: {
-          cart_id: string | null
-          cart_link: string | null
-          created_at: string
-          customer_name: string | null
-          email: string | null
-          error_message: string | null
-          id: string
-          message_sent: string | null
-          phone: string | null
-          products: Json | null
-          status: string
-        }
-        Insert: {
-          cart_id?: string | null
-          cart_link?: string | null
-          created_at?: string
-          customer_name?: string | null
-          email?: string | null
-          error_message?: string | null
-          id?: string
-          message_sent?: string | null
-          phone?: string | null
-          products?: Json | null
-          status?: string
-        }
-        Update: {
-          cart_id?: string | null
-          cart_link?: string | null
-          created_at?: string
-          customer_name?: string | null
-          email?: string | null
-          error_message?: string | null
-          id?: string
-          message_sent?: string | null
-          phone?: string | null
-          products?: Json | null
-          status?: string
         }
         Relationships: []
       }
@@ -821,7 +740,6 @@ export type Database = {
           sent_count: number
           updated_at: string
           weight: number
-          whatsapp_template_id: string | null
         }
         Insert: {
           body: string
@@ -834,7 +752,6 @@ export type Database = {
           sent_count?: number
           updated_at?: string
           weight?: number
-          whatsapp_template_id?: string | null
         }
         Update: {
           body?: string
@@ -847,7 +764,6 @@ export type Database = {
           sent_count?: number
           updated_at?: string
           weight?: number
-          whatsapp_template_id?: string | null
         }
         Relationships: [
           {
@@ -1177,7 +1093,6 @@ export type Database = {
           tags: string[] | null
           target_stage_id: string | null
           trigger_condition: string
-          whatsapp_template_id: string | null
         }
         Insert: {
           action_type?: string
@@ -1192,7 +1107,6 @@ export type Database = {
           tags?: string[] | null
           target_stage_id?: string | null
           trigger_condition?: string
-          whatsapp_template_id?: string | null
         }
         Update: {
           action_type?: string
@@ -1207,7 +1121,6 @@ export type Database = {
           tags?: string[] | null
           target_stage_id?: string | null
           trigger_condition?: string
-          whatsapp_template_id?: string | null
         }
         Relationships: [
           {
@@ -3221,14 +3134,7 @@ export type Database = {
           created_at: string
           id: string
           instance_id: string
-          meta_access_token: string | null
-          meta_api_version: string
-          meta_app_secret: string | null
-          meta_phone_number_id: string | null
-          meta_verify_token: string | null
-          meta_waba_id: string | null
           phone: string | null
-          provider: string
           status: string
           token: string
           updated_at: string
@@ -3238,14 +3144,7 @@ export type Database = {
           created_at?: string
           id?: string
           instance_id?: string
-          meta_access_token?: string | null
-          meta_api_version?: string
-          meta_app_secret?: string | null
-          meta_phone_number_id?: string | null
-          meta_verify_token?: string | null
-          meta_waba_id?: string | null
           phone?: string | null
-          provider?: string
           status?: string
           token?: string
           updated_at?: string
@@ -3255,60 +3154,11 @@ export type Database = {
           created_at?: string
           id?: string
           instance_id?: string
-          meta_access_token?: string | null
-          meta_api_version?: string
-          meta_app_secret?: string | null
-          meta_phone_number_id?: string | null
-          meta_verify_token?: string | null
-          meta_waba_id?: string | null
           phone?: string | null
-          provider?: string
           status?: string
           token?: string
           updated_at?: string
           webhook_token?: string
-        }
-        Relationships: []
-      }
-      whatsapp_templates: {
-        Row: {
-          body_preview: string
-          category: string
-          created_at: string
-          header_type: string | null
-          id: string
-          is_active: boolean
-          language: string
-          name: string
-          status: string
-          updated_at: string
-          variables: Json
-        }
-        Insert: {
-          body_preview: string
-          category?: string
-          created_at?: string
-          header_type?: string | null
-          id?: string
-          is_active?: boolean
-          language?: string
-          name: string
-          status?: string
-          updated_at?: string
-          variables?: Json
-        }
-        Update: {
-          body_preview?: string
-          category?: string
-          created_at?: string
-          header_type?: string | null
-          id?: string
-          is_active?: boolean
-          language?: string
-          name?: string
-          status?: string
-          updated_at?: string
-          variables?: Json
         }
         Relationships: []
       }
@@ -3568,7 +3418,6 @@ export type Database = {
           target_stage_id: string
           trigger_id: string
           trigger_name: string
-          whatsapp_template_id: string
         }[]
       }
       get_campaign_metrics: { Args: { p_campaign_id: string }; Returns: Json }
