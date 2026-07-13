@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, Trash2, Upload, ArrowLeft, Calendar, Users, MessageSquare, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { WhatsAppTemplateSelect } from '@/components/whatsapp/WhatsAppTemplateSelect';
 
 type Source = 'lead' | 'customer' | 'csv';
 type Recipient = {
@@ -53,8 +54,8 @@ export default function CRMCampaignNew() {
   const [customerSearch, setCustomerSearch] = useState('');
 
   // Step 3 — templates
-  const [templates, setTemplates] = useState<{ label: string; body: string }[]>([
-    { label: 'A', body: 'Olá {{primeiro_nome}}, tudo bem? Temos uma oferta especial para você!' },
+  const [templates, setTemplates] = useState<{ label: string; body: string; whatsapp_template_id: string | null }[]>([
+    { label: 'A', body: 'Olá {{primeiro_nome}}, tudo bem? Temos uma oferta especial para você!', whatsapp_template_id: null },
   ]);
 
   useEffect(() => {
@@ -192,7 +193,10 @@ export default function CRMCampaignNew() {
       const { data: createdTemplates, error: tErr } = await supabase
         .from('crm_campaign_templates')
         .insert(
-          templates.map((t) => ({ campaign_id: campaign.id, label: t.label, body: t.body, weight: 1 }))
+          templates.map((t) => ({
+            campaign_id: campaign.id, label: t.label, body: t.body, weight: 1,
+            whatsapp_template_id: t.whatsapp_template_id,
+          }))
         )
         .select();
       if (tErr) throw tErr;
@@ -473,6 +477,15 @@ export default function CRMCampaignNew() {
                   setTemplates(next);
                 }}
               />
+              <Label className="text-xs">Template Meta (fallback fora da janela de 24h)</Label>
+              <WhatsAppTemplateSelect
+                value={t.whatsapp_template_id}
+                onChange={(v) => {
+                  const next = [...templates];
+                  next[idx] = { ...t, whatsapp_template_id: v };
+                  setTemplates(next);
+                }}
+              />
             </div>
           ))}
           {templates.length < 3 && (
@@ -482,7 +495,7 @@ export default function CRMCampaignNew() {
               onClick={() =>
                 setTemplates([
                   ...templates,
-                  { label: String.fromCharCode(65 + templates.length), body: '' },
+                  { label: String.fromCharCode(65 + templates.length), body: '', whatsapp_template_id: null },
                 ])
               }
             >

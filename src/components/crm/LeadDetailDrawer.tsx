@@ -90,7 +90,7 @@ export function LeadDetailDrawer({ lead, stages, open, onOpenChange }: LeadDetai
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-send`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-send`,
         {
           method: 'POST',
           headers: {
