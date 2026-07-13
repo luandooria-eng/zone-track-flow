@@ -1,16 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getWhatsAppConfig, normalizePhone, sendWhatsAppMessage } from "../_shared/whatsapp-send.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-function normalizePhone(raw: string): string {
-  const digits = (raw || "").replace(/\D/g, "");
-  if (digits.length === 10 || digits.length === 11) return "55" + digits;
-  return digits;
-}
 
 function applyTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -56,10 +51,10 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const [leadRes, triggersRes, configRes] = await Promise.all([
+    const [leadRes, triggersRes, config] = await Promise.all([
       supabase.from("crm_leads").select("id, name, phone, whatsapp_conversation_id").eq("id", lead_id).single(),
       supabase.from("crm_triggers").select("*").eq("stage_id", stage_id).eq("trigger_condition", "on_enter").eq("is_active", true),
-      supabase.from("whatsapp_config").select("instance_id, token").eq("id", "00000000-0000-0000-0000-000000000099").maybeSingle(),
+      getWhatsAppConfig(supabase),
     ]);
 
     if (leadRes.error || !leadRes.data) {
@@ -70,10 +65,8 @@ Deno.serve(async (req) => {
 
     const lead = leadRes.data;
     const triggers = triggersRes.data ?? [];
-    const config = configRes.data;
-    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN") ?? "";
 
-    if (triggers.length === 0 || !lead.phone) {
+    if (triggers.length === 0 || !lead.phone || !config) {
       return new Response(JSON.stringify({ ok: true, fired: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -98,35 +91,32 @@ Deno.serve(async (req) => {
 
       const convId = conv?.id ?? lead.whatsapp_conversation_id;
 
-      if (config?.instance_id && config?.token) {
-        const zapiUrl = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-        const zapiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        if (clientToken) zapiHeaders["Client-Token"] = clientToken;
+      const result = await sendWhatsAppMessage(supabase, config, {
+        phone,
+        message,
+        fallbackTemplateId: trigger.whatsapp_template_id,
+        templateVariables: [lead.name || "Cliente"],
+      });
 
-        const zapiRes = await fetch(zapiUrl, {
-          method: "POST", headers: zapiHeaders,
-          body: JSON.stringify({ phone, message }),
+      if (result.ok && convId) {
+        await supabase.from("whatsapp_messages").insert({
+          conversation_id: convId,
+          message_id: result.messageId,
+          direction: "outbound", content: message, type: "text", status: "sent",
+          sent_by: user.id,
         });
-
-        if (zapiRes.ok && convId) {
-          const zapiData = await zapiRes.json().catch(() => ({}));
-          await supabase.from("whatsapp_messages").insert({
-            conversation_id: convId,
-            message_id: zapiData.messageId || zapiData.id || null,
-            direction: "outbound", content: message, type: "text", status: "sent",
-            sent_by: user.id,
-          });
-        }
       }
 
       await supabase.from("crm_activities").insert({
         lead_id, type: "trigger_fired",
-        content: `Mensagem automática enviada: "${trigger.name}"`,
-        metadata: { trigger_id: trigger.id, trigger_name: trigger.name, message_sent: message, phone },
+        content: result.ok
+          ? `Mensagem automática enviada: "${trigger.name}"`
+          : `Falha ao enviar mensagem automática "${trigger.name}": ${result.error}`,
+        metadata: { trigger_id: trigger.id, trigger_name: trigger.name, message_sent: message, phone, send_ok: result.ok },
         created_by: user.id,
       });
 
-      fired++;
+      if (result.ok) fired++;
     }
 
     return new Response(JSON.stringify({ ok: true, fired }), {

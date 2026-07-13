@@ -204,7 +204,7 @@ export function RecurrencePanel({ open, onOpenChange }: RecurrencePanelProps) {
 
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-send`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-send`,
         {
           method: 'POST',
           headers: {
