@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Droplets } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { LoadingScreen } from '@/components/system/LoadingScreen';
+import { AcenoLogo } from '@/components/auth/AcenoLogo';
 
 export default function Auth() {
   const { user, isLoading } = useAuth();
@@ -33,20 +34,18 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-background p-4">
       <div className="w-full max-w-md">
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-            <Droplets className="h-7 w-7 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">AquaGás</h1>
-            <p className="text-sm text-muted-foreground">Sistema de Gestão</p>
-          </div>
+        <div className="mb-8">
+          <AcenoLogo />
         </div>
 
         <Card className="shadow-lg">
           <Tabs defaultValue="login">
             <CardHeader className="pb-4">
-              <TabsList className="grid w-full grid-cols-2">
+              <CardTitle className="text-center text-lg font-semibold">Acesso</CardTitle>
+              <CardDescription className="text-center">
+                Entre com sua conta para continuar
+              </CardDescription>
+              <TabsList className="grid w-full grid-cols-2 mt-2">
                 <TabsTrigger value="login">Entrar</TabsTrigger>
                 <TabsTrigger value="register">Cadastrar</TabsTrigger>
               </TabsList>
@@ -73,7 +72,7 @@ export default function Auth() {
         </Card>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          © 2024 AquaGás. Todos os direitos reservados.
+          © 2026 Aceno. Todos os direitos reservados.
         </p>
       </div>
     </div>
