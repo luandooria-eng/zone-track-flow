@@ -12,7 +12,13 @@ const supabase = createClient(
 );
 
 function normalizePhone(raw: string): string {
-  return (raw || "").replace(/\D/g, "");
+  let digits = (raw || "").replace(/\D/g, "");
+  // Same 9th-digit canonicalization as _shared/whatsapp-send.ts, kept in sync
+  // so Z-API and Meta Cloud API never split the same contact into two threads.
+  if (digits.length === 13 && digits.startsWith("55") && digits[4] === "9") {
+    digits = digits.slice(0, 4) + digits.slice(5);
+  }
+  return digits;
 }
 
 function extractMedia(payload: Record<string, unknown>): { mediaUrl: string | null; msgType: string } {

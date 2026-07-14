@@ -30,8 +30,16 @@ export interface SendResult {
 }
 
 export function normalizePhone(raw: string): string {
-  const digits = (raw || "").replace(/\D/g, "");
-  if (digits.length === 10 || digits.length === 11) return "55" + digits;
+  let digits = (raw || "").replace(/\D/g, "");
+  if (digits.length === 10 || digits.length === 11) digits = "55" + digits;
+  // Brazilian mobile numbers carry an extra "9" prefix on the local subscriber
+  // number (55 + DDD + 9XXXXXXXX = 13 digits) that Meta's webhook `from` field
+  // omits (55 + DDD + XXXXXXXX = 12 digits). Without this, the same contact
+  // gets split across two conversations depending on which side produced the
+  // number. Canonicalize to the 12-digit form Meta actually sends.
+  if (digits.length === 13 && digits.startsWith("55") && digits[4] === "9") {
+    digits = digits.slice(0, 4) + digits.slice(5);
+  }
   return digits;
 }
 
