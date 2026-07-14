@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWhatsAppConversations } from '@/hooks/useWhatsApp';
+import { useAuth } from '@/contexts/AuthContext';
 
 const menuItems = [
   { icon: MessageCircle, label: 'WhatsApp', path: '/whatsapp' },
@@ -106,8 +107,13 @@ export function Sidebar() {
   const location = useLocation();
   const { isCollapsed, toggle } = useSidebar();
   const { data: conversations = [] } = useWhatsAppConversations();
+  const { user, profile } = useAuth();
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
   const mainBadges = totalUnread > 0 ? { '/whatsapp': totalUnread } : {};
+
+  const displayName = profile?.full_name || user?.email || 'Usuário';
+  const displayEmail = user?.email || '';
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <>
@@ -191,17 +197,17 @@ export function Sidebar() {
           {!isCollapsed ? (
             <div className="flex items-center gap-2.5 rounded-lg bg-sidebar-hover/30 p-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold shrink-0">
-                A
+                {initial}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white truncate">Admin</p>
-                <p className="text-[10px] text-sidebar-text-muted truncate">admin@seugeraldo.com</p>
+                <p className="text-xs font-medium text-white truncate">{displayName}</p>
+                <p className="text-[10px] text-sidebar-text-muted truncate">{displayEmail}</p>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
-                A
+                {initial}
               </div>
             </div>
           )}
