@@ -47,7 +47,15 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useWhatsAppConfig, useSaveWhatsAppConfig } from '@/hooks/useWhatsApp';
+import {
+  useWhatsAppConfig,
+  useSaveWhatsAppConfig,
+  useSaveMetaConfig,
+  useSetWhatsAppProvider,
+  WhatsAppProvider,
+} from '@/hooks/useWhatsApp';
+import { WhatsAppTemplatesPanel } from '@/components/whatsapp/WhatsAppTemplatesPanel';
+import { WhatsAppTemplateSelect } from '@/components/whatsapp/WhatsAppTemplateSelect';
 
 function CopyField({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -74,17 +82,31 @@ function CopyField({ label, value, hint }: { label: string; value: string; hint?
   );
 }
 
-function ZApiConfigDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function WhatsAppConfigDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: config, isLoading } = useWhatsAppConfig();
-  const save = useSaveWhatsAppConfig();
+  const saveZApi = useSaveWhatsAppConfig();
+  const saveMeta = useSaveMetaConfig();
+  const setProvider = useSetWhatsAppProvider();
+
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);
+
+  const [phoneNumberId, setPhoneNumberId] = useState('');
+  const [wabaId, setWabaId] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [appSecret, setAppSecret] = useState('');
+  const [showAccessToken, setShowAccessToken] = useState(false);
+  const [showAppSecret, setShowAppSecret] = useState(false);
 
   useEffect(() => {
     if (config) {
       setInstanceId(prev => prev || config.instance_id || '');
       setToken(prev => prev || config.token || '');
+      setPhoneNumberId(prev => prev || config.meta_phone_number_id || '');
+      setWabaId(prev => prev || config.meta_waba_id || '');
+      setAccessToken(prev => prev || config.meta_access_token || '');
+      setAppSecret(prev => prev || config.meta_app_secret || '');
     }
   }, [config]);
 
@@ -98,13 +120,29 @@ function ZApiConfigDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   const sendTextUrl = apiBaseUrl ? `${apiBaseUrl}/send-text` : '';
 
-  function handleSave() {
+  const metaWebhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-webhook`;
+  const verifyToken = config?.meta_verify_token || '';
+
+  function handleSaveZApi() {
     if (!instanceId.trim() || !token.trim()) {
       toast.error('Preencha Instance ID e Token');
       return;
     }
-    save.mutate({ instance_id: instanceId.trim(), token: token.trim() });
-    onClose();
+    saveZApi.mutate({ instance_id: instanceId.trim(), token: token.trim() });
+  }
+
+  function handleSaveMeta() {
+    if (!phoneNumberId.trim() || !accessToken.trim()) {
+      toast.error('Preencha Phone Number ID e Access Token');
+      return;
+    }
+    saveMeta.mutate({
+      meta_phone_number_id: phoneNumberId.trim(),
+      meta_waba_id: wabaId.trim(),
+      meta_access_token: accessToken.trim(),
+      meta_app_secret: appSecret.trim(),
+      meta_verify_token: verifyToken || crypto.randomUUID(),
+    });
   }
 
   if (!open) return null;
@@ -114,7 +152,7 @@ function ZApiConfigDialog({ open, onClose }: { open: boolean; onClose: () => voi
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5 text-green-500" />
-          Configurar Z-API
+          Configurar WhatsApp
         </DialogTitle>
       </DialogHeader>
 
@@ -122,78 +160,200 @@ function ZApiConfigDialog({ open, onClose }: { open: boolean; onClose: () => voi
         <div className="py-6 text-center text-sm text-muted-foreground">Carregando...</div>
       ) : (
         <div className="space-y-4 pt-2">
-          <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground space-y-1">
-            <p className="font-medium text-foreground">Como configurar:</p>
-            <ol className="list-decimal list-inside space-y-0.5">
-              <li>Acesse sua conta Z-API e crie uma instância</li>
-              <li>Copie o Instance ID e o Token de segurança</li>
-              <li>Cole os dados abaixo e salve</li>
-              <li>Na Z-API, configure o Webhook com a URL abaixo</li>
-              <li>Escaneie o QR Code para conectar seu WhatsApp</li>
-            </ol>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Instance ID</Label>
-            <Input
-              placeholder="Ex: 3D6AB4A2B5C8..."
-              value={instanceId}
-              onChange={(e) => setInstanceId(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Token de Segurança</Label>
-            <div className="relative">
-              <Input
-                type={showToken ? 'text' : 'password'}
-                placeholder="Seu token Z-API"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                className="pr-10"
-              />
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => setShowToken((v) => !v)}
-              >
-                {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+          <div className="rounded-lg border p-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Provedor ativo</p>
+              <p className="text-xs text-muted-foreground">
+                Define qual API envia e recebe as mensagens agora.
+              </p>
             </div>
+            <Select
+              value={config?.provider || 'zapi'}
+              onValueChange={(v) => setProvider.mutate(v as WhatsAppProvider)}
+            >
+              <SelectTrigger className="w-[190px] shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="zapi">Z-API</SelectItem>
+                <SelectItem value="meta_cloud">Meta Cloud API (Oficial)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {apiBaseUrl && (
-            <div className="rounded-lg border border-border p-3 space-y-3">
-              <p className="text-xs font-medium text-foreground">URLs da API da Instância</p>
-              <CopyField
-                label="URL Base da Instância"
-                value={apiBaseUrl}
-                hint="Use para qualquer chamada à Z-API desta instância"
-              />
-              <CopyField
-                label="Endpoint Enviar Mensagem"
-                value={sendTextUrl}
-                hint="POST para enviar mensagens de texto"
-              />
-            </div>
-          )}
+          <Tabs defaultValue={config?.provider === 'meta_cloud' ? 'meta' : 'zapi'}>
+            <TabsList className="w-full">
+              <TabsTrigger value="zapi" className="flex-1">Z-API</TabsTrigger>
+              <TabsTrigger value="meta" className="flex-1">Meta Cloud API</TabsTrigger>
+            </TabsList>
 
-          {webhookUrl && (
-            <CopyField
-              label="URL do Webhook (configure na Z-API)"
-              value={webhookUrl}
-              hint="Cole esta URL nas configurações de Webhook da Z-API"
-            />
-          )}
+            <TabsContent value="zapi" className="space-y-4 pt-3">
+              <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">Como configurar:</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Acesse sua conta Z-API e crie uma instância</li>
+                  <li>Copie o Instance ID e o Token de segurança</li>
+                  <li>Cole os dados abaixo e salve</li>
+                  <li>Na Z-API, configure o Webhook com a URL abaixo</li>
+                  <li>Escaneie o QR Code para conectar seu WhatsApp</li>
+                </ol>
+              </div>
 
-          <div className="flex gap-2 pt-2">
-            <Button variant="outline" className="flex-1" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button className="flex-1 bg-green-500 hover:bg-green-600" onClick={handleSave} disabled={save.isPending}>
-              Salvar Configuração
-            </Button>
-          </div>
+              <div className="space-y-2">
+                <Label>Instance ID</Label>
+                <Input
+                  placeholder="Ex: 3D6AB4A2B5C8..."
+                  value={instanceId}
+                  onChange={(e) => setInstanceId(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Token de Segurança</Label>
+                <div className="relative">
+                  <Input
+                    type={showToken ? 'text' : 'password'}
+                    placeholder="Seu token Z-API"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowToken((v) => !v)}
+                  >
+                    {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {apiBaseUrl && (
+                <div className="rounded-lg border border-border p-3 space-y-3">
+                  <p className="text-xs font-medium text-foreground">URLs da API da Instância</p>
+                  <CopyField
+                    label="URL Base da Instância"
+                    value={apiBaseUrl}
+                    hint="Use para qualquer chamada à Z-API desta instância"
+                  />
+                  <CopyField
+                    label="Endpoint Enviar Mensagem"
+                    value={sendTextUrl}
+                    hint="POST para enviar mensagens de texto"
+                  />
+                </div>
+              )}
+
+              {webhookUrl && (
+                <CopyField
+                  label="URL do Webhook (configure na Z-API)"
+                  value={webhookUrl}
+                  hint="Cole esta URL nas configurações de Webhook da Z-API"
+                />
+              )}
+
+              <Button className="w-full bg-green-500 hover:bg-green-600" onClick={handleSaveZApi} disabled={saveZApi.isPending}>
+                Salvar Z-API
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="meta" className="space-y-4 pt-3">
+              <div className="rounded-lg bg-muted/40 border border-border p-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">Como configurar (Meta for Developers):</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Crie um App tipo "Business" e adicione o produto WhatsApp</li>
+                  <li>Copie o Phone Number ID e o WABA ID</li>
+                  <li>Gere um token permanente (System User, em Meta Business Suite)</li>
+                  <li>Cole os dados abaixo e salve</li>
+                  <li>No App, cole a URL do webhook + o token de verificação abaixo</li>
+                  <li>Assine os campos "messages" no webhook</li>
+                </ol>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Phone Number ID</Label>
+                <Input
+                  placeholder="Ex: 109876543210987"
+                  value={phoneNumberId}
+                  onChange={(e) => setPhoneNumberId(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>WhatsApp Business Account ID (WABA)</Label>
+                <Input
+                  placeholder="Ex: 123456789012345"
+                  value={wabaId}
+                  onChange={(e) => setWabaId(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Access Token (permanente)</Label>
+                <div className="relative">
+                  <Input
+                    type={showAccessToken ? 'text' : 'password'}
+                    placeholder="Token do System User"
+                    value={accessToken}
+                    onChange={(e) => setAccessToken(e.target.value)}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowAccessToken((v) => !v)}
+                  >
+                    {showAccessToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>App Secret</Label>
+                <p className="text-xs text-muted-foreground">
+                  Usado para validar a assinatura dos webhooks recebidos. Em Configurações do App → Básico.
+                </p>
+                <div className="relative">
+                  <Input
+                    type={showAppSecret ? 'text' : 'password'}
+                    placeholder="App Secret"
+                    value={appSecret}
+                    onChange={(e) => setAppSecret(e.target.value)}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowAppSecret((v) => !v)}
+                  >
+                    {showAppSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border p-3 space-y-3">
+                <p className="text-xs font-medium text-foreground">Configuração do Webhook (Meta App Dashboard)</p>
+                <CopyField
+                  label="URL de Callback"
+                  value={metaWebhookUrl}
+                  hint="Cole em WhatsApp → Configuração → Webhook"
+                />
+                <CopyField
+                  label="Token de Verificação"
+                  value={verifyToken || '(gerado ao salvar)'}
+                  hint="Cole no campo 'Verify Token' junto com a URL acima"
+                />
+              </div>
+
+              <Button className="w-full bg-green-500 hover:bg-green-600" onClick={handleSaveMeta} disabled={saveMeta.isPending}>
+                Salvar Meta Cloud API
+              </Button>
+            </TabsContent>
+          </Tabs>
+
+          <Button variant="outline" className="w-full" onClick={onClose}>
+            Fechar
+          </Button>
         </div>
       )}
     </DialogContent>
@@ -333,6 +493,7 @@ const webhookEvents = [
 function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [webhookSecret, setWebhookSecret] = useState('');
   const [template, setTemplate] = useState('');
+  const [whatsappTemplateId, setWhatsappTemplateId] = useState<string | null>(null);
   const [active, setActive] = useState(true);
   const [testMode, setTestMode] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -358,6 +519,7 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
         if (source) {
           setWebhookSecret(source.webhook_secret || generated);
           setTemplate(source.message_template || '');
+          setWhatsappTemplateId(source.whatsapp_template_id || null);
           setActive(source.active ?? true);
           setTestMode(source.test_mode ?? false);
         } else {
@@ -375,6 +537,7 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
     const payload = {
       webhook_secret: webhookSecret,
       message_template: template,
+      whatsapp_template_id: whatsappTemplateId,
       active,
       test_mode: testMode,
       updated_at: new Date().toISOString(),
@@ -470,6 +633,14 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
             </p>
           </div>
 
+          <div className="space-y-2">
+            <Label>Template Meta (fallback fora da janela de 24h)</Label>
+            <p className="text-xs text-muted-foreground">
+              Se o provedor ativo for a Meta Cloud API e o contato não respondeu nas últimas 24h, este template aprovado é usado no lugar do texto livre acima.
+            </p>
+            <WhatsAppTemplateSelect value={whatsappTemplateId} onChange={setWhatsappTemplateId} />
+          </div>
+
           {/* Test mode toggle */}
           <div className="flex items-center justify-between rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
             <div>
@@ -508,7 +679,7 @@ function UoouShopConfigDialog({ open, onClose }: { open: boolean; onClose: () =>
 export default function Integrations() {
   const [webhooks, setWebhooks] = useState(mockWebhooks);
   const [isAddWebhookOpen, setIsAddWebhookOpen] = useState(false);
-  const [isZApiOpen, setIsZApiOpen] = useState(false);
+  const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
   const [isUoouOpen, setIsUoouOpen] = useState(false);
   const [newWebhook, setNewWebhook] = useState({ name: '', url: '', events: [] as string[] });
 
@@ -577,8 +748,8 @@ export default function Integrations() {
         </p>
       </div>
 
-      <Dialog open={isZApiOpen} onOpenChange={setIsZApiOpen}>
-        <ZApiConfigDialog open={isZApiOpen} onClose={() => setIsZApiOpen(false)} />
+      <Dialog open={isWhatsAppOpen} onOpenChange={setIsWhatsAppOpen}>
+        <WhatsAppConfigDialog open={isWhatsAppOpen} onClose={() => setIsWhatsAppOpen(false)} />
       </Dialog>
 
       <Dialog open={isUoouOpen} onOpenChange={setIsUoouOpen}>
@@ -593,6 +764,8 @@ export default function Integrations() {
         </TabsList>
 
         <TabsContent value="integrations" className="mt-4 space-y-6">
+          <WhatsAppTemplatesPanel />
+
           {/* UoouShop — featured */}
           <div>
             <h3 className="font-semibold mb-3">E-commerce</h3>
@@ -669,7 +842,7 @@ export default function Integrations() {
                               variant="outline"
                               size="sm"
                               className="flex-1 gap-1"
-                              onClick={() => integration.id === 'whatsapp' && setIsZApiOpen(true)}
+                              onClick={() => integration.id === 'whatsapp' && setIsWhatsAppOpen(true)}
                             >
                               <Settings className="h-3 w-3" />
                               Configurar
@@ -683,7 +856,7 @@ export default function Integrations() {
                             variant="destructive"
                             size="sm"
                             className="flex-1 gap-1"
-                            onClick={() => integration.id === 'whatsapp' && setIsZApiOpen(true)}
+                            onClick={() => integration.id === 'whatsapp' && setIsWhatsAppOpen(true)}
                           >
                             <AlertTriangle className="h-3 w-3" />
                             Reconectar
@@ -692,7 +865,7 @@ export default function Integrations() {
                           <Button
                             size="sm"
                             className="flex-1 gap-1"
-                            onClick={() => integration.id === 'whatsapp' && setIsZApiOpen(true)}
+                            onClick={() => integration.id === 'whatsapp' && setIsWhatsAppOpen(true)}
                           >
                             <Link2 className="h-3 w-3" />
                             Conectar

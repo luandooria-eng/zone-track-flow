@@ -1,17 +1,12 @@
 // CRM Campaign Dispatcher — processes scheduled campaigns, respects rate limit & send window
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getWhatsAppConfig, normalizePhone, sendWhatsAppMessage } from "../_shared/whatsapp-send.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
-
-function normalizePhone(raw: string): string {
-  const digits = (raw || "").replace(/\D/g, "");
-  if (digits.length === 10 || digits.length === 11) return "55" + digits;
-  return digits;
-}
 
 function applyTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
@@ -61,19 +56,14 @@ Deno.serve(async (req) => {
         .in("id", toStart.map((c) => c.id));
     }
 
-    // 2) Load Z-API config
-    const { data: config } = await supabase
-      .from("whatsapp_config")
-      .select("instance_id, token")
-      .eq("id", "00000000-0000-0000-0000-000000000099")
-      .maybeSingle();
+    // 2) Load WhatsApp config (Z-API or Meta Cloud API, whichever is active)
+    const config = await getWhatsAppConfig(supabase);
 
-    if (!config?.instance_id || !config?.token) {
-      return new Response(JSON.stringify({ ok: false, error: "Z-API not configured" }), {
+    if (!config) {
+      return new Response(JSON.stringify({ ok: false, error: "WhatsApp not configured" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN") ?? "";
 
     // 3) Fetch active sending campaigns
     const { data: campaigns } = await supabase
@@ -114,7 +104,7 @@ Deno.serve(async (req) => {
 
       const { data: templates } = await supabase
         .from("crm_campaign_templates")
-        .select("id, label, body, weight, sent_count")
+        .select("id, label, body, weight, sent_count, whatsapp_template_id")
         .eq("campaign_id", c.id);
 
       if (!templates || templates.length === 0) {
@@ -173,26 +163,22 @@ Deno.serve(async (req) => {
             .select("id")
             .single();
 
-          // Send Z-API
-          const zapiUrl = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-          const zapiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-          if (clientToken) zapiHeaders["Client-Token"] = clientToken;
-          const zapiRes = await fetch(zapiUrl, {
-            method: "POST",
-            headers: zapiHeaders,
-            body: JSON.stringify({ phone, message }),
+          const sendResult = await sendWhatsAppMessage(supabase, config, {
+            phone,
+            message,
+            fallbackTemplateId: tpl.whatsapp_template_id,
+            templateVariables: [firstName || r.name || ""],
           });
-          const zapiData = await zapiRes.json().catch(() => ({} as any));
 
-          if (!zapiRes.ok) {
+          if (!sendResult.ok) {
             await supabase
               .from("crm_campaign_recipients")
-              .update({ status: "failed", error_message: JSON.stringify(zapiData).slice(0, 500) })
+              .update({ status: "failed", error_message: String(sendResult.error).slice(0, 500) })
               .eq("id", r.id);
             continue;
           }
 
-          const messageId = zapiData.messageId || zapiData.id || null;
+          const messageId = sendResult.messageId ?? null;
           const nowIso = new Date().toISOString();
 
           // Log message

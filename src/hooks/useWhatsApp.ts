@@ -32,13 +32,22 @@ export interface WhatsAppMessage {
   created_at: string;
 }
 
+export type WhatsAppProvider = 'zapi' | 'meta_cloud';
+
 export interface WhatsAppConfig {
   id: string;
+  provider: WhatsAppProvider;
   instance_id: string;
   token: string;
   phone: string | null;
   status: string;
   webhook_token: string;
+  meta_phone_number_id: string | null;
+  meta_waba_id: string | null;
+  meta_access_token: string | null;
+  meta_app_secret: string | null;
+  meta_verify_token: string | null;
+  meta_api_version: string;
 }
 
 export function useWhatsAppConversations() {
@@ -222,7 +231,7 @@ export function useSendWhatsAppMessage() {
     }: { phone: string; message: string; conversationId: string }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-send`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-send`,
         {
           method: 'POST',
           headers: {
@@ -339,6 +348,62 @@ export function useSaveWhatsAppConfig() {
     onError: (error) => {
       console.error('Z-API config save error:', error);
       toast.error('Erro ao salvar configurações Z-API');
+    },
+  });
+}
+
+export interface MetaCloudConfigInput {
+  meta_phone_number_id: string;
+  meta_waba_id: string;
+  meta_access_token: string;
+  meta_app_secret: string;
+  meta_verify_token: string;
+}
+
+export function useSaveMetaConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: MetaCloudConfigInput) => {
+      const { error } = await supabase
+        .from('whatsapp_config')
+        .upsert({
+          id: '00000000-0000-0000-0000-000000000099',
+          ...input,
+          updated_at: new Date().toISOString(),
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-config'] });
+      toast.success('Configurações da Meta Cloud API salvas com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Meta config save error:', error);
+      toast.error('Erro ao salvar configurações da Meta Cloud API');
+    },
+  });
+}
+
+export function useSetWhatsAppProvider() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (provider: WhatsAppProvider) => {
+      const { error } = await supabase
+        .from('whatsapp_config')
+        .upsert({
+          id: '00000000-0000-0000-0000-000000000099',
+          provider,
+          updated_at: new Date().toISOString(),
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-config'] });
+      toast.success('Provedor de WhatsApp atualizado!');
+    },
+    onError: (error) => {
+      console.error('Provider switch error:', error);
+      toast.error('Erro ao trocar o provedor');
     },
   });
 }

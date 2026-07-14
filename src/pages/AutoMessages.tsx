@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import {
   CalendarIcon, Droplets, Send, MessageCircle, CheckCircle2, XCircle, Clock,
-  RefreshCw, Search, Target, Repeat,
+  RefreshCw, Search, Target, Repeat, Flame,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';

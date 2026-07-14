@@ -1,16 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getWhatsAppConfig, normalizePhone, sendWhatsAppMessage } from "../_shared/whatsapp-send.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-
-function normalizePhone(raw: string): string {
-  const digits = (raw || "").replace(/\D/g, "");
-  if (digits.length === 10 || digits.length === 11) return "55" + digits;
-  return digits;
-}
 
 function applyTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -89,27 +84,40 @@ Deno.serve(async (req) => {
     const withinBusinessHours = currentHourBR >= startHour && currentHourBR < endHour;
     console.log(`[business-hours] BR ${weekdayBR} ${currentHourBR}h → window ${startHour}–${endHour} → ${withinBusinessHours ? "OPEN" : "BLOCKED"}`);
 
-    const { data: config } = await supabase
-      .from("whatsapp_config").select("instance_id, token")
-      .eq("id", "00000000-0000-0000-0000-000000000099").maybeSingle();
-
-    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN") ?? "";
+    const config = await getWhatsAppConfig(supabase);
     let processed = 0;
 
-    async function sendWhatsApp(phone: string, message: string, convId: string | null, leadId: string, triggerId: string, triggerName: string) {
-      if (!config?.instance_id || !config?.token) return;
+    async function sendWhatsApp(
+      phone: string, message: string, convId: string | null, leadId: string,
+      triggerId: string, triggerName: string, leadName: string, templateId?: string | null,
+    ): Promise<boolean> {
+      if (!config) {
+        console.error(`[crm-timer-processor] trigger "${triggerName}" skipped — WhatsApp not configured`);
+        return false;
+      }
       if (!withinBusinessHours) {
         console.log(`[business-hours] BLOCKED send for trigger "${triggerName}" (${weekdayBR} ${currentHourBR}h, janela ${startHour}–${endHour})`);
-        return;
+        return false;
       }
-      const zapiUrl = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-      const zapiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-      if (clientToken) zapiHeaders["Client-Token"] = clientToken;
-      const zapiRes = await fetch(zapiUrl, { method: "POST", headers: zapiHeaders, body: JSON.stringify({ phone, message }) });
-      if (zapiRes.ok && convId) {
-        const zapiData = await zapiRes.json().catch(() => ({}));
+      const result = await sendWhatsAppMessage(supabase, config, {
+        phone, message, fallbackTemplateId: templateId, templateVariables: [leadName || "Cliente"],
+      });
+      if (!result.ok) {
+        console.error(`[crm-timer-processor] send failed for trigger "${triggerName}": ${result.error}`);
+        await supabase.from("crm_activities").insert({
+          lead_id: leadId, type: "trigger_fired",
+          content: `⚠️ Falha ao enviar WhatsApp pelo gatilho "${triggerName}"`,
+          metadata: {
+            trigger_id: triggerId, trigger_name: triggerName, message_attempted: message, phone,
+            error: result.error,
+          },
+          created_by: callerId,
+        });
+        return false;
+      }
+      if (convId) {
         await supabase.from("whatsapp_messages").insert({
-          conversation_id: convId, message_id: zapiData.messageId || zapiData.id || null,
+          conversation_id: convId, message_id: result.messageId,
           direction: "outbound", content: message, type: "text", status: "sent", sent_by: callerId,
         });
       }
@@ -119,11 +127,12 @@ Deno.serve(async (req) => {
         metadata: { trigger_id: triggerId, trigger_name: triggerName, message_sent: message, phone },
         created_by: callerId,
       });
+      return true;
     }
 
     // ── time_in_stage triggers ────────────────────────────────────────────────
     for (const row of (pendingRows ?? [])) {
-      const { lead_id, lead_name, lead_phone, stage_id, trigger_id, trigger_name, action_type, message_template, target_stage_id, tags } = row;
+      const { lead_id, lead_name, lead_phone, stage_id, trigger_id, trigger_name, action_type, message_template, target_stage_id, tags, whatsapp_template_id } = row;
 
       let actionOk = false;
 
@@ -134,8 +143,7 @@ Deno.serve(async (req) => {
         const { data: conv } = await supabase.from("whatsapp_conversations")
           .upsert({ phone, status: "open", last_message: message.slice(0, 500), last_message_at: new Date().toISOString() }, { onConflict: "phone" })
           .select("id").single();
-        await sendWhatsApp(phone, message, conv?.id ?? null, lead_id, trigger_id, trigger_name);
-        actionOk = true;
+        actionOk = await sendWhatsApp(phone, message, conv?.id ?? null, lead_id, trigger_id, trigger_name, lead_name, whatsapp_template_id);
       }
       if (action_type === "move_stage" && target_stage_id) {
         const { error: updErr } = await supabase
@@ -214,8 +222,7 @@ Deno.serve(async (req) => {
           const { data: conv } = await supabase.from("whatsapp_conversations")
             .upsert({ phone, status: "open", last_message: message.slice(0, 500), last_message_at: new Date().toISOString() }, { onConflict: "phone" })
             .select("id").single();
-          await sendWhatsApp(phone, message, conv?.id ?? lead.whatsapp_conversation_id, lead.id, trigger.id, trigger.name);
-          actionOk = true;
+          actionOk = await sendWhatsApp(phone, message, conv?.id ?? lead.whatsapp_conversation_id, lead.id, trigger.id, trigger.name, lead.name, trigger.whatsapp_template_id);
         }
         if (trigger.action_type === "move_stage" && trigger.target_stage_id) {
           const { error: updErr, data: updData } = await supabase
@@ -251,7 +258,7 @@ Deno.serve(async (req) => {
                 const { data: conv } = await supabase.from("whatsapp_conversations")
                   .upsert({ phone, status: "open", last_message: message.slice(0, 500), last_message_at: new Date().toISOString() }, { onConflict: "phone" })
                   .select("id").single();
-                await sendWhatsApp(phone, message, conv?.id ?? lead.whatsapp_conversation_id, lead.id, et.id, et.name);
+                await sendWhatsApp(phone, message, conv?.id ?? lead.whatsapp_conversation_id, lead.id, et.id, et.name, lead.name, et.whatsapp_template_id);
                 console.log(`[lead ${lead.id}] on_enter whatsapp sent for trigger "${et.name}"`);
               } else if (et.action_type === "add_tag" && et.tags?.length > 0) {
                 await supabase.from("crm_lead_tags").upsert(

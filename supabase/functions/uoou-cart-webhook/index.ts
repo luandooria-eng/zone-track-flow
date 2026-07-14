@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getWhatsAppConfig, normalizePhone, sendWhatsAppMessage } from "../_shared/whatsapp-send.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -11,12 +12,6 @@ function json(data: unknown, status = 200) {
     status,
     headers: { ...cors, "Content-Type": "application/json" },
   });
-}
-
-function normalizePhone(raw: string): string {
-  const digits = (raw || "").replace(/\D/g, "");
-  if (digits.length === 10 || digits.length === 11) return "55" + digits;
-  return digits;
 }
 
 function buildMessage(template: string, vars: Record<string, string>): string {
@@ -111,11 +106,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, status: "pending", cart_id: cartId });
   }
 
-  const { data: zapiConfig } = await supabase
-    .from("whatsapp_config")
-    .select("instance_id, token")
-    .eq("id", "00000000-0000-0000-0000-000000000099")
-    .maybeSingle();
+  const waConfig = await getWhatsAppConfig(supabase);
 
   let status = "sent";
   let errorMessage: string | null = null;
@@ -123,25 +114,20 @@ Deno.serve(async (req) => {
 
   if (testMode) {
     status = "test";
-  } else if (!zapiConfig?.instance_id || !zapiConfig?.token) {
+  } else if (!waConfig) {
     status = "failed";
-    errorMessage = "Z-API not configured";
+    errorMessage = "WhatsApp not configured";
   } else {
     const phone = normalizePhone(rawPhone);
-    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN") ?? "";
-    const zapiUrl = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
-    const zapiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-    if (clientToken) zapiHeaders["Client-Token"] = clientToken;
     try {
-      const res = await fetch(zapiUrl, { method: "POST", headers: zapiHeaders, body: JSON.stringify({ phone, message }) });
-      if (res.ok) {
-        const zapiData = await res.json().catch(() => ({}));
-        messageId = zapiData.messageId ?? zapiData.id ?? null;
-      } else {
-        const err = await res.json().catch(() => ({}));
-        status = "failed";
-        errorMessage = JSON.stringify(err);
-      }
+      const result = await sendWhatsAppMessage(supabase, waConfig, {
+        phone,
+        message,
+        fallbackTemplateId: config.whatsapp_template_id,
+        templateVariables: [customerName || "Cliente"],
+      });
+      if (result.ok) messageId = result.messageId ?? null;
+      else { status = "failed"; errorMessage = result.error ?? "send failed"; }
     } catch (err) { status = "failed"; errorMessage = String(err); }
   }
 

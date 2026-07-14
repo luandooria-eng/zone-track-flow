@@ -2,18 +2,13 @@
 // Sends WhatsApp reminders to customers based on their personal avg_days frequency per product type.
 // Runs every 15 min via pg_cron.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getWhatsAppConfig, normalizePhone, sendWhatsAppMessage } from "../_shared/whatsapp-send.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
-
-function normalizePhone(raw: string): string {
-  const digits = (raw || "").replace(/\D/g, "");
-  if (digits.length === 10 || digits.length === 11) return "55" + digits;
-  return digits;
-}
 
 function applyTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -46,19 +41,14 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // 1) Load Z-API config
-    const { data: config } = await supabase
-      .from("whatsapp_config")
-      .select("instance_id, token")
-      .eq("id", "00000000-0000-0000-0000-000000000099")
-      .maybeSingle();
+    // 1) Load WhatsApp config (Z-API or Meta Cloud API, whichever is active)
+    const config = await getWhatsAppConfig(supabase);
 
-    if (!config?.instance_id || !config?.token) {
-      return new Response(JSON.stringify({ ok: false, error: "Z-API not configured" }), {
+    if (!config) {
+      return new Response(JSON.stringify({ ok: false, error: "WhatsApp not configured" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN") ?? "";
 
     // 2) Load active rules
     const { data: rules } = await supabase
@@ -123,9 +113,9 @@ Deno.serve(async (req) => {
         }
 
         const attemptNum = (cyc.attempt_count || 0) + 1;
-        const tplBody = attemptNum > 1 && rule.followup_message_template
-          ? rule.followup_message_template
-          : rule.message_template;
+        const isFollowup = attemptNum > 1 && !!rule.followup_message_template;
+        const tplBody = isFollowup ? rule.followup_message_template : rule.message_template;
+        const fallbackTemplateId = isFollowup ? rule.followup_whatsapp_template_id : rule.whatsapp_template_id;
 
         const firstName = (customer.name || "").split(" ")[0] || "";
         const daysSince = cyc.cycle_anchor_at
@@ -148,26 +138,20 @@ Deno.serve(async (req) => {
           )
           .select("id").single();
 
-        // Send via Z-API
-        const zapiUrl = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-        const zapiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        if (clientToken) zapiHeaders["Client-Token"] = clientToken;
-        const zapiRes = await fetch(zapiUrl, {
-          method: "POST", headers: zapiHeaders,
-          body: JSON.stringify({ phone, message }),
+        const sendResult = await sendWhatsAppMessage(supabase, config, {
+          phone, message, fallbackTemplateId, templateVariables: [firstName || customer.name || ""],
         });
-        const zapiData = await zapiRes.json().catch(() => ({} as any));
 
-        if (!zapiRes.ok) {
+        if (!sendResult.ok) {
           await supabase.from("auto_reactivation_log").insert({
             cycle_id: cyc.id, customer_id: customer.id, product_type: rule.product_type,
             attempt_number: attemptNum, phone, message_content: message,
-            status: "failed", error_message: JSON.stringify(zapiData).slice(0, 500),
+            status: "failed", error_message: String(sendResult.error).slice(0, 500),
           });
           continue;
         }
 
-        const messageId = zapiData.messageId || zapiData.id || null;
+        const messageId = sendResult.messageId ?? null;
 
         await supabase.from("whatsapp_messages").insert({
           conversation_id: conv?.id ?? null, message_id: messageId,
@@ -261,25 +245,20 @@ Deno.serve(async (req) => {
             )
             .select("id").single();
 
-          const zapiUrl = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-          const zapiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-          if (clientToken) zapiHeaders["Client-Token"] = clientToken;
-          const zapiRes = await fetch(zapiUrl, {
-            method: "POST", headers: zapiHeaders,
-            body: JSON.stringify({ phone, message }),
+          const sendResult = await sendWhatsAppMessage(supabase, config, {
+            phone, message, fallbackTemplateId: rule.whatsapp_template_id, templateVariables: [firstName || customerName],
           });
-          const zapiData = await zapiRes.json().catch(() => ({} as any));
 
-          if (!zapiRes.ok) {
+          if (!sendResult.ok) {
             await supabase.from("auto_reactivation_log").insert({
               cycle_id: newCyc.id, customer_id: customerId, product_type: rule.product_type,
               attempt_number: 1, phone, message_content: message,
-              status: "failed", error_message: JSON.stringify(zapiData).slice(0, 500),
+              status: "failed", error_message: String(sendResult.error).slice(0, 500),
             });
             continue;
           }
 
-          const messageId = zapiData.messageId || zapiData.id || null;
+          const messageId = sendResult.messageId ?? null;
           await supabase.from("whatsapp_messages").insert({
             conversation_id: conv?.id ?? null, message_id: messageId,
             direction: "outbound", content: message, type: "text", status: "sent",
