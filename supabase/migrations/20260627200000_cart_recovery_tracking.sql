@@ -12,5 +12,8 @@ create index if not exists cart_recovery_logs_message_id_idx on cart_recovery_lo
 create index if not exists cart_recovery_logs_phone_idx on cart_recovery_logs(phone);
 
 -- Allow service_role to update logs (for tracking webhooks)
-create policy if not exists "service update cart_recovery_logs"
+DO $pol$ BEGIN
+create policy "service update cart_recovery_logs"
   on cart_recovery_logs for update to service_role using (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $pol$;
