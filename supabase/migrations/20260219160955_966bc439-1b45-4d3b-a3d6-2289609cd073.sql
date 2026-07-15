@@ -30,5 +30,10 @@ ON public.customers (phone)
 WHERE phone IS NOT NULL AND phone != '';
 
 -- Update loyalty_client_tokens to add expiration
-ALTER TABLE public.loyalty_client_tokens 
-ADD COLUMN IF NOT EXISTS expires_at timestamptz DEFAULT (now() + interval '30 days');
+-- (guarded: this table is created outside tracked migrations on some
+-- environments; skip cleanly where it doesn't exist yet)
+DO $$ BEGIN
+  IF to_regclass('public.loyalty_client_tokens') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.loyalty_client_tokens ADD COLUMN IF NOT EXISTS expires_at timestamptz DEFAULT (now() + interval ''30 days'')';
+  END IF;
+END $$;
