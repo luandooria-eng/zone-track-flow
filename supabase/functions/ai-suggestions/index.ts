@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { authenticateCaller } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +13,25 @@ serve(async (req) => {
   }
 
   try {
-    const { customerName, customerHistory, products } = await req.json();
+    // Only signed-in staff may spend AI credits (the public anon key is not enough).
+    const auth = await authenticateCaller(req, {
+      corsHeaders,
+      allowedRoles: ["admin", "manager", "operator", "finance", "deliverer"],
+      allowScheduler: false,
+    });
+    if (auth.response) return auth.response;
+
+    const body = await req.json();
+    // Bound user-controlled text that is interpolated into the prompt.
+    const clip = (v: unknown, max: number) => String(v ?? "").slice(0, max);
+    const customerName = clip(body.customerName, 120);
+    const customerHistory = clip(body.customerHistory, 4000);
+    const products = Array.isArray(body.products)
+      ? body.products.slice(0, 50).map((p: { name?: unknown; price?: unknown }) => ({
+          name: clip(p?.name, 80),
+          price: Number(p?.price) || 0,
+        }))
+      : [];
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -50,7 +69,7 @@ Histórico de compras recentes:
 ${customerHistory || "Nenhum histórico disponível"}
 
 Produtos disponíveis:
-${products?.map((p: any) => `- ${p.name} (R$ ${p.price})`).join('\n') || "Gás P13, Gás P45, Água Mineral 20L"}
+${products.map((p: { name: string; price: number }) => `- ${p.name} (R$ ${p.price})`).join('\n') || "Gás P13, Gás P45, Água Mineral 20L"}
 
 Gere sugestões inteligentes para este cliente.`;
 

@@ -1,4 +1,5 @@
 // CRM Campaign Dispatcher — processes scheduled campaigns, respects rate limit & send window
+import { authenticateCaller } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getWhatsAppConfig, normalizePhone, sendWhatsAppMessage } from "../_shared/whatsapp-send.ts";
 
@@ -37,6 +38,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const auth = await authenticateCaller(req, {
+      corsHeaders,
+      allowedRoles: ["admin", "manager", "operator"],
+    });
+    if (auth.response) return auth.response;
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
