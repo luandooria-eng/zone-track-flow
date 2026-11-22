@@ -1,3 +1,4 @@
+import { authenticateCaller } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getWhatsAppConfig, normalizePhone, sendWhatsAppMessage } from "../_shared/whatsapp-send.ts";
 
@@ -47,18 +48,13 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Try to identify caller (optional — cron runs without user)
-    let callerId: string | null = null;
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      const supabaseAuth = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_ANON_KEY")!,
-        { global: { headers: { Authorization: authHeader } } },
-      );
-      const { data: { user } } = await supabaseAuth.auth.getUser();
-      callerId = user?.id ?? null;
-    }
+    const auth = await authenticateCaller(req, {
+      corsHeaders,
+      allowedRoles: ["admin", "manager", "operator"],
+    });
+    if (auth.response) return auth.response;
+
+    const callerId: string | null = auth.caller.userId;
 
     const { data: pendingRows, error: pendingErr } = await supabase.rpc("crm_get_pending_timer_leads");
     if (pendingErr) {

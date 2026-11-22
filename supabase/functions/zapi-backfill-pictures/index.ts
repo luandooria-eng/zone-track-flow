@@ -1,4 +1,5 @@
 // Backfill profile pictures for existing WhatsApp conversations
+import { authenticateCaller } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -34,6 +35,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const auth = await authenticateCaller(req, {
+      corsHeaders,
+      allowedRoles: ["admin"],
+    });
+    if (auth.response) return auth.response;
+
     const { data: config } = await supabase
       .from("whatsapp_config")
       .select("instance_id, token")

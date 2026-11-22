@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getWhatsAppConfig, sendWhatsAppMessage } from "../_shared/whatsapp-send.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,7 +44,10 @@ Deno.serve(async (req) => {
     }
 
     // Generate 6-digit code
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Cryptographically secure code (uniform over 100000..999999).
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    const code = String(100000 + (buf[0] % 900000));
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 min TTL
 
     await supabase.from("portal_otp_codes").insert({
@@ -52,28 +56,28 @@ Deno.serve(async (req) => {
       expires_at: expiresAt,
     });
 
-    // Check if customer exists
-    const { data: customer } = await supabase
-      .from("customers")
-      .select("id, name")
-      .eq("phone", normalized)
-      .maybeSingle();
+    // Deliver the code over WhatsApp. It is NEVER returned to the caller or logged.
+    const config = await getWhatsAppConfig(supabase);
+    if (!config) {
+      console.error("portal-send-otp: WhatsApp not configured");
+      return new Response(JSON.stringify({ error: "Could not send code. Try again later." }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
-    // In dev mode, return the code. In production, send via SMS/WhatsApp.
-    console.log(`[DEV] OTP for ${normalized}: ${code}`);
+    const sent = await sendWhatsAppMessage(supabase, config, {
+      phone: normalized,
+      message: `Seu código de verificação é ${code}. Ele expira em 5 minutos. Não compartilhe com ninguém.`,
+    });
+    if (!sent.ok) {
+      console.error("portal-send-otp: send failed", sent.error);
+      return new Response(JSON.stringify({ error: "Could not send code. Try again later." }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
+    // Same response whether or not the phone belongs to a customer (no account enumeration).
     return new Response(
-      JSON.stringify({
-        success: true,
-        phone: normalized,
-        is_new: !customer,
-        customer_name: customer?.name || null,
-        // DEV ONLY: remove in production
-        dev_code: code,
-      }),
+      JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

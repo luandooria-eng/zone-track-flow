@@ -327,6 +327,32 @@ export function useWhatsAppConfig() {
   });
 }
 
+/** Non-secret WhatsApp status, readable by any authenticated operator (secrets stay admin-only). */
+export interface WhatsAppConfigStatus {
+  id: string;
+  provider: WhatsAppProvider;
+  status: string;
+  phone: string | null;
+  meta_api_version: string;
+  zapi_configured: boolean;
+  meta_configured: boolean;
+}
+
+export function useWhatsAppConfigStatus() {
+  return useQuery({
+    queryKey: ['whatsapp-config-status'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('whatsapp_config_public' as never)
+        .select('*')
+        .eq('id', '00000000-0000-0000-0000-000000000099')
+        .maybeSingle();
+      if (error) throw error;
+      return data as WhatsAppConfigStatus | null;
+    },
+  });
+}
+
 export function useSaveWhatsAppConfig() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -343,6 +369,7 @@ export function useSaveWhatsAppConfig() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-config'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-config-status'] });
       toast.success('Configurações Z-API salvas com sucesso!');
     },
     onError: (error) => {
@@ -375,6 +402,7 @@ export function useSaveMetaConfig() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-config'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-config-status'] });
       toast.success('Configurações da Meta Cloud API salvas com sucesso!');
     },
     onError: (error) => {
@@ -399,6 +427,7 @@ export function useSetWhatsAppProvider() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-config'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-config-status'] });
       toast.success('Provedor de WhatsApp atualizado!');
     },
     onError: (error) => {
