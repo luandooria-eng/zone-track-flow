@@ -21,7 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   useWhatsAppConversations, useWhatsAppMessages, useSendWhatsAppMessage,
-  useMarkConversationRead, useSetConversationStatus, useWhatsAppConfig,
+  useMarkConversationRead, useSetConversationStatus, useWhatsAppConfigStatus,
   type WhatsAppConversation, type WhatsAppMessage,
 } from '@/hooks/useWhatsApp';
 import {
@@ -701,7 +701,7 @@ export default function WhatsAppInbox() {
 
   const { data: conversations = [], isLoading: loadingConvs } = useWhatsAppConversations();
   const { data: messages = [], isLoading: loadingMsgs } = useWhatsAppMessages(selectedId);
-  const { data: config } = useWhatsAppConfig();
+  const { data: config } = useWhatsAppConfigStatus();
   const sendMessage = useSendWhatsAppMessage();
   const markRead = useMarkConversationRead();
   const setStatus = useSetConversationStatus();
@@ -709,7 +709,7 @@ export default function WhatsAppInbox() {
   useWhatsAppNotificationSound();
 
   const selectedConv = conversations.find((c) => c.id === selectedId) ?? null;
-  const isConfigured = !!(config?.instance_id && config?.token);
+  const isConfigured = !!(config?.zapi_configured || config?.meta_configured);
 
   const filtered = conversations.filter((c) => {
     const q = search.toLowerCase();

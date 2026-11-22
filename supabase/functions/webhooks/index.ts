@@ -21,6 +21,69 @@ interface WebhookConfig {
   active: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Security helpers
+// ---------------------------------------------------------------------------
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+/** Constant-time string comparison. */
+function safeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  let diff = ab.length ^ bb.length;
+  const len = Math.max(ab.length, bb.length);
+  for (let i = 0; i < len; i++) diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
+  return diff === 0;
+}
+
+/** Requires a valid user JWT belonging to an admin. Returns an error Response or null. */
+async function requireAdmin(req: Request): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+
+  const supabaseAuth = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data: userData, error } = await supabaseAuth.auth.getUser();
+  if (error || !userData?.user) return json({ error: "Unauthorized" }, 401);
+
+  const { data: isAdmin } = await supabaseAuth.rpc("has_role", {
+    _user_id: userData.user.id,
+    _role: "admin",
+  });
+  if (!isAdmin) return json({ error: "Forbidden" }, 403);
+  return null;
+}
+
+/** Only public https URLs are allowed as webhook targets (basic SSRF guard). */
+function isSafeWebhookUrl(raw: unknown): boolean {
+  if (typeof raw !== "string") return false;
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  const h = u.hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local")) return false;
+  if (h.includes(":")) return false; // IPv6 literals
+  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 10 || a === 127 || a === 0 || a >= 224) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+  }
+  return true;
+}
+
 // In-memory webhook registry (in production, this would be in the database)
 const webhookRegistry: WebhookConfig[] = [];
 
@@ -93,6 +156,12 @@ serve(async (req) => {
     const path = url.pathname.split("/").filter(Boolean);
     const action = path[path.length - 1];
 
+    // Everything except the inbound receiver is an admin-only management action.
+    if (action !== "inbound") {
+      const denied = await requireAdmin(req);
+      if (denied) return denied;
+    }
+
     // Register a new webhook
     if (action === "register" && req.method === "POST") {
       const body = await req.json();
@@ -103,6 +172,10 @@ serve(async (req) => {
           JSON.stringify({ error: "Missing required fields: url, events" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      if (!isSafeWebhookUrl(webhookUrl)) {
+        return json({ error: "Invalid webhook url: must be a public https URL" }, 400);
       }
 
       const newWebhook: WebhookConfig = {
@@ -180,7 +253,13 @@ serve(async (req) => {
       const webhookSecret = req.headers.get("x-webhook-secret");
       const expectedSecret = Deno.env.get("WEBHOOK_SECRET");
 
-      if (expectedSecret && webhookSecret !== expectedSecret) {
+      // Fail closed: without a configured secret the endpoint is disabled.
+      if (!expectedSecret) {
+        console.error("WEBHOOK_SECRET not configured; rejecting inbound webhook");
+        return json({ error: "Inbound webhooks not configured" }, 503);
+      }
+
+      if (!webhookSecret || !safeEqual(webhookSecret, expectedSecret)) {
         return new Response(
           JSON.stringify({ error: "Invalid webhook secret" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }

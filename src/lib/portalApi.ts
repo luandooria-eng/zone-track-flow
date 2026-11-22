@@ -1,5 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
-
 const FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1';
 
 async function callFunction(name: string, body: Record<string, unknown>) {
@@ -96,36 +94,26 @@ export async function fetchPortalCustomer(token: string) {
   return result.customer;
 }
 
-// Fetch ledger for customer
-export async function fetchLedger(customerId: string, limit = 50) {
-  const { data, error } = await supabase
-    .from('loyalty_ledger')
-    .select('*')
-    .eq('customer_id', customerId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data || [];
+// Portal data is read through the `portal-data` edge function (validated by session token).
+// The browser no longer queries loyalty tables directly with the anon key.
+async function fetchPortalResource(resource: 'ledger' | 'vouchers' | 'coupons', extra: Record<string, unknown> = {}) {
+  const token = getStoredToken();
+  if (!token) throw new Error('Invalid session');
+  const result = await callFunction('portal-data', { token, resource, ...extra });
+  return result.data || [];
 }
 
-// Fetch vouchers for customer
-export async function fetchVouchers(customerId: string) {
-  const { data, error } = await supabase
-    .from('loyalty_vouchers')
-    .select('*, coupon:loyalty_coupons(title, description)')
-    .eq('customer_id', customerId)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data || [];
+// Fetch ledger for the logged-in customer (customer is derived from the session token)
+export async function fetchLedger(_customerId?: string, limit = 50) {
+  return fetchPortalResource('ledger', { limit });
+}
+
+// Fetch vouchers for the logged-in customer
+export async function fetchVouchers(_customerId?: string) {
+  return fetchPortalResource('vouchers');
 }
 
 // Fetch active coupons
 export async function fetchCoupons() {
-  const { data, error } = await supabase
-    .from('loyalty_coupons')
-    .select('*')
-    .eq('is_active', true)
-    .order('points_cost', { ascending: true });
-  if (error) throw error;
-  return data || [];
+  return fetchPortalResource('coupons');
 }

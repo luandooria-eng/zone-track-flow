@@ -81,11 +81,4 @@ DO $rt$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $rt$;
 
--- Configure Z-API credentials
-UPDATE public.whatsapp_config
-SET
-  instance_id = '3F1C9A2066A332EA1692AAE399BC1248',
-  token       = '146608482446638C50ADB77E',
-  status      = 'disconnected',
-  updated_at  = now()
-WHERE id = '00000000-0000-0000-0000-000000000099';
+-- (Credenciais Z-API removidas do repositório: configure pela tela de Integrações.)
